@@ -1,15 +1,16 @@
 # .dockerignore
 
-# Dependencias y logs
-node_modules
-npm-debug.log
-
-# Archivos de sesión (estos se manejarán con volúmenes)
+# Archivos de sesión (se manejarán con volúmenes, no deben estar en la imagen)
 sessions/
 
-# Variables de entorno locales
+# Dependencias locales que Docker instalará por su cuenta
+node_modules
+
+# Archivos de logs y de entorno
+npm-debug.log
 .env
 
-# Archivos del sistema operativo y de IDE
-.DS_Store
-.vscode/
+# Metadatos del sistema de control de versiones y del editor
+.git
+.gitignore
+.vscode

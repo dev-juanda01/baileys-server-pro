@@ -4,6 +4,9 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './src/config/swagger.js';
+
 import logger from "./src/utils/logger.js";
 import sessionRoutes from "./src/api/routes/session.routes.js";
 import { initializeDirectories } from "./src/utils/init.js";
@@ -24,6 +27,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api/sessions", sessionRoutes);
 
 app.listen(PORT, () => {
