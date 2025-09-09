@@ -1,3 +1,5 @@
+// src/services/WhatsappSession.js
+
 import pino from "pino";
 import path from "path";
 import fs from "fs/promises";
@@ -10,6 +12,7 @@ import {
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import logger from "../utils/logger.js";
+import SessionManager from "./SessionManager.js"; // -> 1. Importar SessionManager para poder limpiar la sesión del map
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,8 +59,8 @@ class WhatsappSession {
             this.sock.ev.on("creds.update", saveCreds);
         } catch (error) {
             logger.error(
-                `[${this.sessionId}] Error al inicializar la sesión:`,
-                error
+                { error },
+                `[${this.sessionId}] Error al inicializar la sesión`
             );
             this.status = "error";
         }
@@ -100,8 +103,8 @@ class WhatsappSession {
             );
         } catch (error) {
             logger.error(
-                `[${this.sessionId}] Error al enviar el webhook:`,
-                error
+                { error },
+                `[${this.sessionId}] Error al enviar el webhook`
             );
         }
     }
@@ -112,17 +115,16 @@ class WhatsappSession {
 
         if (qr) this.qr = qr;
 
-        console.log(lastDisconnect);
-
         logger.info(
             `[${this.sessionId}] Actualización de conexión: ${this.status}`
         );
+        console.log(lastDisconnect);
+        
 
         if (connection === "close") {
-            const statusCode = (lastDisconnect.error instanceof Boom)?.output
-                ?.statusCode;
+            const statusCode = lastDisconnect.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            
+
             logger.warn(
                 `[${this.sessionId}] Conexión cerrada, motivo: ${statusCode}, reconectando: ${shouldReconnect}`
             );
@@ -130,15 +132,16 @@ class WhatsappSession {
             if (shouldReconnect) {
                 this.startReconnecting();
             } else {
-                logger.info(
-                    `[${this.sessionId}] Sesión cerrada permanentemente (logout). No se reconectará.`
+                // -> 2. Si es un logout permanente, llamamos a la función de limpieza
+                logger.warn(
+                    `[${this.sessionId}] Sesión cerrada permanentemente (logout). Limpiando archivos...`
                 );
+                this.cleanup();
             }
         } else if (connection === "open") {
             logger.info(
                 `[${this.sessionId}] ¡Conexión establecida exitosamente!`
             );
-
             this.retryCount = 0;
             this.qr = null;
         }
@@ -170,8 +173,6 @@ class WhatsappSession {
     }
 
     async sendMessage(number, message) {
-        logger.info(this.status);
-
         if (this.status !== "open") {
             throw new Error("La sesión de WhatsApp no está abierta.");
         }
@@ -182,18 +183,27 @@ class WhatsappSession {
         return this.sock.sendMessage(jid, { text: message });
     }
 
-    async logout() {
-        if (this.sock) {
-            await this.sock.logout();
-        }
+    // -> 3. Nuevo método para borrar la sesión del disco y de la memoria
+    async cleanup() {
         this.status = "close";
         try {
             await fs.rm(this.authPath, { recursive: true, force: true });
+            SessionManager.sessions.delete(this.sessionId);
+            logger.info(
+                `[${this.sessionId}] Archivos de sesión eliminados correctamente.`
+            );
         } catch (error) {
             logger.error(
-                `[${this.sessionId}] Error al limpiar la carpeta de sesión:`,
-                error
+                { error },
+                `[${this.sessionId}] Error al limpiar la carpeta de sesión`
             );
+        }
+    }
+
+    // -> 4. El logout ahora solo cierra la conexión. La limpieza la maneja 'connection.update'
+    async logout() {
+        if (this.sock) {
+            await this.sock.logout();
         }
     }
 }
