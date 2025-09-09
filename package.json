@@ -1,0 +1,29 @@
+{
+    "name": "baileys-server-pro",
+    "version": "1.0.0",
+    "description": "Servidor multi-sesión de WhatsApp con Baileys y ESM",
+    "main": "server.js",
+    "type": "module",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node --watch server.js"
+    },
+    "keywords": [
+        "whatsapp",
+        "baileys",
+        "esm",
+        "docker"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@hapi/boom": "10.0.1",
+        "@whiskeysockets/baileys": "6.7.5",
+        "cors": "^2.8.5",
+        "dotenv": "16.4.5",
+        "express": "4.19.2",
+        "pino": "9.2.0",
+        "pino-pretty": "^13.1.1",
+        "qrcode-terminal": "0.12.0"
+    }
+}

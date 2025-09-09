@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Cliente Baileys-Server</title>
+        <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    Roboto, Helvetica, Arial, sans-serif;
+                background-color: #f4f7f6;
+                color: #333;
+                max-width: 800px;
+                margin: 20px auto;
+                padding: 20px;
+            }
+            .container {
+                display: flex;
+                flex-direction: column;
+                gap: 30px;
+            }
+            .card {
+                background-color: #fff;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                padding: 20px;
+            }
+            .card h2 {
+                margin-top: 0;
+                color: #007bff;
+            }
+            .form-group {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-bottom: 15px;
+            }
+            label {
+                font-weight: bold;
+            }
+            input[type="text"] {
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 1rem;
+            }
+            button {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 12px 15px;
+                border-radius: 4px;
+                font-size: 1rem;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            button:hover {
+                background-color: #0056b3;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            #qr-code {
+                min-height: 256px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin: 20px auto;
+                border: 5px solid #eee;
+                padding: 10px;
+                border-radius: 8px;
+            }
+            #status-display,
+            #api-response {
+                background-color: #e9ecef;
+                padding: 15px;
+                border-radius: 4px;
+                font-family: "Courier New", Courier, monospace;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            #status-display {
+                font-weight: bold;
+                text-align: center;
+            }
+            .info-box {
+                background-color: #d1ecf1;
+                border: 1px solid #bee5eb;
+                color: #0c5460;
+                padding: 15px;
+                border-radius: 4px;
+                margin-top: 15px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Cliente de Prueba para Baileys Server 🚀</h1>
+
+            <div class="card">
+                <h2>1. Gestión de Sesión</h2>
+                <div class="form-group">
+                    <label for="session-id">ID de la Sesión</label>
+                    <input
+                        type="text"
+                        id="session-id"
+                        placeholder="Ej: tienda-1"
+                        value="mi-sesion"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="webhook-url">URL del Webhook (Opcional)</label>
+                    <input
+                        type="text"
+                        id="webhook-url"
+                        placeholder="https://tu-endpoint.com/webhook"
+                    />
+                </div>
+                <button id="start-session">Iniciar Sesión</button>
+                <button id="stop-session" disabled>Detener Sesión</button>
+            </div>
+
+            <div class="card">
+                <h2>2. Estado y Código QR</h2>
+                <div id="status-display">Esperando para iniciar sesión...</div>
+                <div id="qr-code"></div>
+            </div>
+
+            <div class="card">
+                <h2>3. Recibir Mensajes (Webhooks)</h2>
+                <div class="info-box">
+                    <p>Para probar la recepción de mensajes:</p>
+                    <ol>
+                        <li>
+                            Ve a
+                            <a href="https://webhook.site/" target="_blank"
+                                >webhook.site</a
+                            >
+                            y copia la URL única que te proporcionan.
+                        </li>
+                        <li>
+                            Pega esa URL en el campo "URL del Webhook" de
+                            arriba.
+                        </li>
+                        <li>Inicia la sesión y escanea el QR.</li>
+                        <li>
+                            Envía un mensaje desde otro teléfono al número de
+                            WhatsApp conectado.
+                        </li>
+                        <li>
+                            ¡El mensaje aparecerá en la página de webhook.site!
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <div id="send-message-card" class="card" style="display: none">
+                <h2>4. Enviar Mensaje</h2>
+                <div class="form-group">
+                    <label for="phone-number"
+                        >Número de Teléfono (con código de país)</label
+                    >
+                    <input
+                        type="text"
+                        id="phone-number"
+                        placeholder="Ej: 573001234567"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="message">Mensaje</label>
+                    <input
+                        type="text"
+                        id="message"
+                        placeholder="Escribe tu mensaje aquí..."
+                    />
+                </div>
+                <button id="send-message">Enviar Mensaje</button>
+            </div>
+
+            <div class="card">
+                <h2>Log de Respuestas de la API</h2>
+                <pre id="api-response">
+Aquí aparecerán las respuestas del servidor...</pre
+                >
+            </div>
+        </div>
+
+        <script>
+            const API_BASE_URL = "http://localhost:3000";
+            const sessionIdInput = document.getElementById("session-id");
+            const webhookUrlInput = document.getElementById("webhook-url");
+            const startBtn = document.getElementById("start-session");
+            const stopBtn = document.getElementById("stop-session");
+            const statusDisplay = document.getElementById("status-display");
+            const qrCodeContainer = document.getElementById("qr-code");
+            const sendMessageCard =
+                document.getElementById("send-message-card");
+            const phoneNumberInput = document.getElementById("phone-number");
+            const messageInput = document.getElementById("message");
+            const sendBtn = document.getElementById("send-message");
+            const apiResponseLog = document.getElementById("api-response");
+
+            let qrCodeInstance = null;
+            let statusInterval = null;
+
+            function logResponse(data) {
+                apiResponseLog.textContent = JSON.stringify(data, null, 2);
+            }
+
+            function updateUI(isSessionActive, isConnected = false) {
+                sessionIdInput.disabled = isSessionActive;
+                webhookUrlInput.disabled = isSessionActive;
+                startBtn.disabled = isSessionActive;
+                stopBtn.disabled = !isSessionActive;
+                sendMessageCard.style.display = isConnected ? "block" : "none";
+            }
+
+            startBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                const webhook = webhookUrlInput.value;
+                if (!sessionId) {
+                    alert("Por favor, introduce un ID de sesión.");
+                    return;
+                }
+
+                statusDisplay.textContent = "Iniciando sesión...";
+                updateUI(true);
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/start`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ sessionId, webhook }),
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+
+                    if (data.success) {
+                        statusDisplay.textContent =
+                            "Sesión iniciada. Esperando estado...";
+                        checkStatus();
+                        statusInterval = setInterval(checkStatus, 3000);
+                    } else {
+                        statusDisplay.textContent = `Error: ${data.message}`;
+                        updateUI(false);
+                    }
+                } catch (error) {
+                    statusDisplay.textContent =
+                        "Error de conexión con el servidor.";
+                    logResponse({ error: error.message });
+                    updateUI(false);
+                }
+            });
+
+            async function checkStatus() {
+                const sessionId = sessionIdInput.value;
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/status`
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+
+                    if (!data.success) {
+                        statusDisplay.textContent = `Error: ${data.message}`;
+                        clearInterval(statusInterval);
+                        updateUI(false);
+                        return;
+                    }
+
+                    let statusText = `Estado: ${data.status}`;
+                    if (data.status === "connecting" && data.qr) {
+                        statusText = "📲 Estado: Escanea el código QR";
+                    } else if (data.status === "open") {
+                        statusText = "✅ Estado: Conectado!";
+                    }
+                    statusDisplay.textContent = statusText;
+
+                    if (data.qr) {
+                        if (!qrCodeInstance) {
+                            qrCodeInstance = new QRCode(qrCodeContainer, {
+                                text: data.qr,
+                                width: 256,
+                                height: 256,
+                            });
+                        }
+                    } else {
+                        if (qrCodeInstance) {
+                            qrCodeContainer.innerHTML = "";
+                            qrCodeInstance = null;
+                        }
+                    }
+
+                    if (data.status === "open") {
+                        clearInterval(statusInterval);
+                        updateUI(true, true);
+                    }
+                } catch (error) {
+                    console.error("Error al verificar estado:", error);
+                    statusDisplay.textContent =
+                        "Error de conexión al verificar estado.";
+                    clearInterval(statusInterval);
+                }
+            }
+
+            sendBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                const number = phoneNumberInput.value;
+                const message = messageInput.value;
+
+                if (!number || !message) {
+                    alert("El número y el mensaje son requeridos.");
+                    return;
+                }
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/send-message`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ number, message }),
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+                    alert(
+                        data.success
+                            ? "Mensaje enviado!"
+                            : `Error: ${data.message}`
+                    );
+                    if (data.success) {
+                        messageInput.value = "";
+                    }
+                } catch (error) {
+                    logResponse({ error: error.message });
+                    alert("Error de conexión al enviar el mensaje.");
+                }
+            });
+
+            stopBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                if (
+                    !confirm(
+                        `¿Seguro que quieres detener la sesión "${sessionId}"?`
+                    )
+                )
+                    return;
+
+                clearInterval(statusInterval);
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/end`,
+                        {
+                            method: "DELETE",
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+
+                    statusDisplay.textContent = "Sesión detenida.";
+                    qrCodeContainer.innerHTML = "";
+                    qrCodeInstance = null;
+                    updateUI(false);
+                } catch (error) {
+                    logResponse({ error: error.message });
+                    alert("Error de conexión al detener la sesión.");
+                }
+            });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,15 @@
+# .dockerignore
+
+# Dependencias y logs
+node_modules
+npm-debug.log
+
+# Archivos de sesión (estos se manejarán con volúmenes)
+sessions/
+
+# Variables de entorno locales
+.env
+
+# Archivos del sistema operativo y de IDE
+.DS_Store
+.vscode/
