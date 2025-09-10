@@ -145,9 +145,9 @@ class WhatsappSession {
         );
 
         if (connection === "close") {
-            const statusCode = (lastDisconnect.error instanceof Boom)?.output
-                ?.statusCode;
+            const statusCode = lastDisconnect.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            
             logger.warn(
                 `[${this.sessionId}] Conexión cerrada, motivo: ${statusCode}, reconectando: ${shouldReconnect}`
             );
