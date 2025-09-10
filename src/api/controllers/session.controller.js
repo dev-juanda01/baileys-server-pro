@@ -1,10 +1,21 @@
 // src/api/controllers/session.controller.js
-
 import SessionManager from "../../services/SessionManager.js";
+import logger from "../../utils/logger.js";
 
+/**
+ * SessionController
+ * Handles WhatsApp session lifecycle: start, status, QR code retrieval, sending messages, and ending sessions.
+ */
 class SessionController {
+    /**
+     * Start a new WhatsApp session.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId and optional webhook in body.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     */
     async start(req, res) {
-        const { sessionId, webhook } = req.body; // -> Recibe la URL del webhook
+        const { sessionId, webhook } = req.body;
         if (!sessionId) {
             return res
                 .status(400)
@@ -15,7 +26,7 @@ class SessionController {
         }
 
         try {
-            await SessionManager.startSession(sessionId, webhook); // -> Pasa el webhook al manager
+            await SessionManager.startSession(sessionId, webhook);
             res.status(200).json({
                 success: true,
                 message:
@@ -23,7 +34,7 @@ class SessionController {
                 sessionId: sessionId,
             });
         } catch (error) {
-            console.error(`Error al iniciar la sesión ${sessionId}:`, error);
+            logger.error({ error }, `Error al iniciar la sesión ${sessionId}`);
             res.status(500).json({
                 success: false,
                 message: "Error al iniciar la sesión.",
@@ -32,6 +43,13 @@ class SessionController {
         }
     }
 
+    /**
+     * Get the status of a WhatsApp session.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId in params.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     */
     async getStatus(req, res) {
         const { sessionId } = req.params;
         const session = SessionManager.getSession(sessionId);
@@ -50,6 +68,79 @@ class SessionController {
         });
     }
 
+    /**
+     * Get the QR code for a WhatsApp session.
+     * If session failed, it will restart and generate a new QR.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId in params.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     */
+    async getQrCode(req, res) {
+        const { sessionId } = req.params;
+        const session = SessionManager.getSession(sessionId);
+
+        if (!session) {
+            return res
+                .status(404)
+                .json({ success: false, message: "Sesión no encontrada." });
+        }
+
+        // If session failed, restart it here.
+        if (session.status === "max_retries_reached") {
+            logger.info(
+                `[${sessionId}] Solicitud de QR para sesión fallida. Reiniciando desde 'qr'`
+            );
+            
+            session.retryCount = 0;
+            session.status = "starting";
+            await session.init();
+
+            setTimeout(() => {
+                res.status(200).json({
+                    success: true,
+                    qr: session.qr,
+                    message:
+                        "Proceso de conexión reiniciado. Nuevo QR generado.",
+                });
+            }, 2000);
+            return;
+        }
+
+        if (session.status === "open") {
+            return res
+                .status(200)
+                .json({
+                    success: true,
+                    qr: null,
+                    message: "La sesión ya está conectada.",
+                });
+        }
+
+        if (!session.qr) {
+            return res
+                .status(200)
+                .json({
+                    success: true,
+                    qr: null,
+                    message:
+                        "El código QR no está disponible o está siendo generado.",
+                });
+        }
+
+        res.status(200).json({
+            success: true,
+            qr: session.qr,
+        });
+    }
+
+    /**
+     * Send a text message using a WhatsApp session.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId in params and number/message in body.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     */
     async sendMessage(req, res) {
         const { sessionId } = req.params;
         const { number, message } = req.body;
@@ -79,7 +170,10 @@ class SessionController {
                 details: result,
             });
         } catch (error) {
-            console.error(`Error al enviar mensaje desde ${sessionId}:`, error);
+            logger.error(
+                { error },
+                `Error al enviar mensaje desde ${sessionId}`
+            );
             res.status(500).json({
                 success: false,
                 message: "Error al enviar el mensaje.",
@@ -88,6 +182,13 @@ class SessionController {
         }
     }
 
+    /**
+     * End a WhatsApp session and delete its data.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId in params.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     */
     async end(req, res) {
         const { sessionId } = req.params;
         const result = await SessionManager.endSession(sessionId);
@@ -106,5 +207,9 @@ class SessionController {
     }
 }
 
+/**
+ * Instance of SessionController to be used in routes.
+ * @type {SessionController}
+ */
 const sessionController = new SessionController();
 export default sessionController;

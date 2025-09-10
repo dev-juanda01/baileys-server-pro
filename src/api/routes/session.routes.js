@@ -133,4 +133,40 @@ router.post("/:sessionId/send-message", SessionController.sendMessage);
  */
 router.delete("/:sessionId/end", SessionController.end);
 
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/qr:
+ *   get:
+ *     summary: Get the QR code for a WhatsApp session
+ *     description: Returns the QR code for the specified session if available. If the session is already connected or the QR is not available, returns a message.
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Unique identifier for the session.
+ *     responses:
+ *       '200':
+ *         description: QR code retrieved successfully or informative message.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 qr:
+ *                   type: string
+ *                   nullable: true
+ *                   description: QR code string or null if not available.
+ *                 message:
+ *                   type: string
+ *                   description: Informative message about the QR code status.
+ *       '404':
+ *         description: Session not found.
+ */
+router.get('/:sessionId/qr', SessionController.getQrCode);
+
 export default router;

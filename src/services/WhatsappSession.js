@@ -118,8 +118,6 @@ class WhatsappSession {
         logger.info(
             `[${this.sessionId}] Actualización de conexión: ${this.status}`
         );
-        console.log(lastDisconnect);
-        
 
         if (connection === "close") {
             const statusCode = lastDisconnect.error?.output?.statusCode;

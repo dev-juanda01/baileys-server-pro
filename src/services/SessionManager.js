@@ -21,6 +21,18 @@ class SessionManager {
             logger.warn(
                 `La sesión ${sessionId} ya existe con estado: ${existingSession.status}`
             );
+
+            // Si la sesión está en estado fallido, la reinicia.
+            if (existingSession.status === "max_retries_reached") {
+                logger.info(
+                    `[${sessionId}] La sesión está en estado fallido. Reiniciando desde 'start'`
+                );
+                existingSession.retryCount = 0;
+                existingSession.status = "starting";
+                
+                await existingSession.init();
+            }
+
             return existingSession;
         }
 
@@ -51,9 +63,7 @@ class SessionManager {
             logger.warn("No hay directorio de sesiones para restaurar.");
             return;
         }
-
         const sessionFolders = fs.readdirSync(SESSIONS_DIR);
-
         for (const sessionId of sessionFolders) {
             const metadataPath = path.join(
                 SESSIONS_DIR,
@@ -90,7 +100,6 @@ class SessionManager {
         if (session) {
             logger.info(`Cerrando sesión: ${sessionId}`);
             await session.logout();
-            this.sessions.delete(sessionId);
             return true;
         }
         return false;

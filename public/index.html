@@ -62,6 +62,9 @@
                 background-color: #ccc;
                 cursor: not-allowed;
             }
+            #qr-card-content {
+                text-align: center;
+            }
             #qr-code {
                 min-height: 256px;
                 display: flex;
@@ -72,7 +75,14 @@
                 padding: 10px;
                 border-radius: 8px;
             }
-            #status-display,
+            #refresh-qr {
+                margin-top: 15px;
+                background-color: #28a745;
+                display: none;
+            }
+            #refresh-qr:hover {
+                background-color: #218838;
+            }
             #api-response {
                 background-color: #e9ecef;
                 padding: 15px;
@@ -80,10 +90,6 @@
                 font-family: "Courier New", Courier, monospace;
                 white-space: pre-wrap;
                 word-wrap: break-word;
-            }
-            #status-display {
-                font-weight: bold;
-                text-align: center;
             }
             .info-box {
                 background-color: #d1ecf1;
@@ -123,9 +129,16 @@
             </div>
 
             <div class="card">
-                <h2>2. Estado y Código QR</h2>
-                <div id="status-display">Esperando para iniciar sesión...</div>
-                <div id="qr-code"></div>
+                <h2>2. Código QR</h2>
+                <div id="qr-card-content">
+                    <div id="qr-code">
+                        <p>
+                            El código QR aparecerá aquí después de iniciar la
+                            sesión.
+                        </p>
+                    </div>
+                    <button id="refresh-qr">Refrescar QR</button>
+                </div>
             </div>
 
             <div class="card">
@@ -138,19 +151,16 @@
                             <a href="https://webhook.site/" target="_blank"
                                 >webhook.site</a
                             >
-                            y copia la URL única que te proporcionan.
+                            y copia la URL única.
                         </li>
-                        <li>
-                            Pega esa URL en el campo "URL del Webhook" de
-                            arriba.
-                        </li>
+                        <li>Pega esa URL en el campo "URL del Webhook".</li>
                         <li>Inicia la sesión y escanea el QR.</li>
                         <li>
-                            Envía un mensaje desde otro teléfono al número de
-                            WhatsApp conectado.
+                            Envía un mensaje desde otro teléfono al número
+                            conectado.
                         </li>
                         <li>
-                            ¡El mensaje aparecerá en la página de webhook.site!
+                            El mensaje aparecerá en la página de webhook.site.
                         </li>
                     </ol>
                 </div>
@@ -189,12 +199,14 @@ Aquí aparecerán las respuestas del servidor...</pre
 
         <script>
             const API_BASE_URL = "http://localhost:3000";
+
+            // Elementos del DOM
             const sessionIdInput = document.getElementById("session-id");
             const webhookUrlInput = document.getElementById("webhook-url");
             const startBtn = document.getElementById("start-session");
             const stopBtn = document.getElementById("stop-session");
-            const statusDisplay = document.getElementById("status-display");
             const qrCodeContainer = document.getElementById("qr-code");
+            const refreshQrBtn = document.getElementById("refresh-qr");
             const sendMessageCard =
                 document.getElementById("send-message-card");
             const phoneNumberInput = document.getElementById("phone-number");
@@ -203,7 +215,6 @@ Aquí aparecerán las respuestas del servidor...</pre
             const apiResponseLog = document.getElementById("api-response");
 
             let qrCodeInstance = null;
-            let statusInterval = null;
 
             function logResponse(data) {
                 apiResponseLog.textContent = JSON.stringify(data, null, 2);
@@ -214,9 +225,14 @@ Aquí aparecerán las respuestas del servidor...</pre
                 webhookUrlInput.disabled = isSessionActive;
                 startBtn.disabled = isSessionActive;
                 stopBtn.disabled = !isSessionActive;
+
+                refreshQrBtn.style.display = isSessionActive
+                    ? "inline-block"
+                    : "none";
                 sendMessageCard.style.display = isConnected ? "block" : "none";
             }
 
+            // INICIAR SESIÓN
             startBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 const webhook = webhookUrlInput.value;
@@ -225,7 +241,8 @@ Aquí aparecerán las respuestas del servidor...</pre
                     return;
                 }
 
-                statusDisplay.textContent = "Iniciando sesión...";
+                qrCodeContainer.innerHTML =
+                    "<p>Iniciando sesión, por favor espera...</p>";
                 updateUI(true);
 
                 try {
@@ -241,73 +258,73 @@ Aquí aparecerán las respuestas del servidor...</pre
                     logResponse(data);
 
                     if (data.success) {
-                        statusDisplay.textContent =
-                            "Sesión iniciada. Esperando estado...";
-                        checkStatus();
-                        statusInterval = setInterval(checkStatus, 3000);
+                        // Esperar un par de segundos para dar tiempo a que se genere el primer QR
+                        setTimeout(refreshQr, 2000);
                     } else {
-                        statusDisplay.textContent = `Error: ${data.message}`;
+                        qrCodeContainer.innerHTML = `<p style="color: red;">Error: ${data.message}</p>`;
                         updateUI(false);
                     }
                 } catch (error) {
-                    statusDisplay.textContent =
-                        "Error de conexión con el servidor.";
+                    qrCodeContainer.innerHTML =
+                        '<p style="color: red;">Error de conexión con el servidor.</p>';
                     logResponse({ error: error.message });
                     updateUI(false);
                 }
             });
 
-            async function checkStatus() {
+            // REFRESCAR QR (LÓGICA ACTUALIZADA)
+            async function refreshQr() {
                 const sessionId = sessionIdInput.value;
                 try {
                     const response = await fetch(
-                        `${API_BASE_URL}/api/sessions/${sessionId}/status`
+                        `${API_BASE_URL}/api/sessions/${sessionId}/qr`,
+                        { cache: "no-cache" }
                     );
                     const data = await response.json();
                     logResponse(data);
 
                     if (!data.success) {
-                        statusDisplay.textContent = `Error: ${data.message}`;
-                        clearInterval(statusInterval);
-                        updateUI(false);
+                        qrCodeContainer.innerHTML = `<p style="color: red;">Error: ${data.message}</p>`;
                         return;
                     }
 
-                    let statusText = `Estado: ${data.status}`;
-                    if (data.status === "connecting" && data.qr) {
-                        statusText = "📲 Estado: Escanea el código QR";
-                    } else if (data.status === "open") {
-                        statusText = "✅ Estado: Conectado!";
-                    }
-                    statusDisplay.textContent = statusText;
-
                     if (data.qr) {
+                        qrCodeContainer.innerHTML = "";
                         if (!qrCodeInstance) {
                             qrCodeInstance = new QRCode(qrCodeContainer, {
                                 text: data.qr,
                                 width: 256,
                                 height: 256,
                             });
+                        } else {
+                            qrCodeInstance.makeCode(data.qr);
                         }
                     } else {
-                        if (qrCodeInstance) {
-                            qrCodeContainer.innerHTML = "";
-                            qrCodeInstance = null;
+                        qrCodeContainer.innerHTML =
+                            "<p>No hay código QR disponible.</p>";
+                        qrCodeInstance = null;
+                        if (data.message) {
+                            alert(data.message);
+                        }
+                        // Verificamos el estado completo para ver si activamos el envío de mensajes
+                        const statusResponse = await fetch(
+                            `${API_BASE_URL}/api/sessions/${sessionId}/status`
+                        );
+                        const statusData = await statusResponse.json();
+                        if (statusData.status === "open") {
+                            updateUI(true, true);
                         }
                     }
-
-                    if (data.status === "open") {
-                        clearInterval(statusInterval);
-                        updateUI(true, true);
-                    }
                 } catch (error) {
-                    console.error("Error al verificar estado:", error);
-                    statusDisplay.textContent =
-                        "Error de conexión al verificar estado.";
-                    clearInterval(statusInterval);
+                    console.error("Error al refrescar QR:", error);
+                    qrCodeContainer.innerHTML =
+                        '<p style="color: red;">Error de conexión al refrescar el QR.</p>';
                 }
             }
 
+            refreshQrBtn.addEventListener("click", refreshQr);
+
+            // ENVIAR MENSAJE
             sendBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 const number = phoneNumberInput.value;
@@ -343,6 +360,7 @@ Aquí aparecerán las respuestas del servidor...</pre
                 }
             });
 
+            // DETENER SESIÓN
             stopBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 if (
@@ -351,8 +369,6 @@ Aquí aparecerán las respuestas del servidor...</pre
                     )
                 )
                     return;
-
-                clearInterval(statusInterval);
 
                 try {
                     const response = await fetch(
@@ -364,8 +380,8 @@ Aquí aparecerán las respuestas del servidor...</pre
                     const data = await response.json();
                     logResponse(data);
 
-                    statusDisplay.textContent = "Sesión detenida.";
-                    qrCodeContainer.innerHTML = "";
+                    qrCodeContainer.innerHTML =
+                        "<p>La sesión ha sido detenida.</p>";
                     qrCodeInstance = null;
                     updateUI(false);
                 } catch (error) {
