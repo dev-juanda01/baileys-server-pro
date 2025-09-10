@@ -258,7 +258,6 @@ Aquí aparecerán las respuestas del servidor...</pre
                     logResponse(data);
 
                     if (data.success) {
-                        // Esperar un par de segundos para dar tiempo a que se genere el primer QR
                         setTimeout(refreshQr, 2000);
                     } else {
                         qrCodeContainer.innerHTML = `<p style="color: red;">Error: ${data.message}</p>`;
@@ -275,6 +274,9 @@ Aquí aparecerán las respuestas del servidor...</pre
             // REFRESCAR QR (LÓGICA ACTUALIZADA)
             async function refreshQr() {
                 const sessionId = sessionIdInput.value;
+                qrCodeContainer.innerHTML =
+                    "<p>Refrescando QR, por favor espera...</p>"; // Mensaje de carga
+
                 try {
                     const response = await fetch(
                         `${API_BASE_URL}/api/sessions/${sessionId}/qr`,
@@ -288,17 +290,19 @@ Aquí aparecerán las respuestas del servidor...</pre
                         return;
                     }
 
+                    qrCodeContainer.innerHTML = ""; // Limpiamos el contenedor antes de decidir qué hacer
+
                     if (data.qr) {
-                        qrCodeContainer.innerHTML = "";
-                        if (!qrCodeInstance) {
-                            qrCodeInstance = new QRCode(qrCodeContainer, {
-                                text: data.qr,
-                                width: 256,
-                                height: 256,
-                            });
-                        } else {
-                            qrCodeInstance.makeCode(data.qr);
-                        }
+                        // -> INICIO DE LA CORRECCIÓN
+                        // Si la instancia ya existe, la limpiamos antes de crear una nueva.
+                        // Si no, simplemente creamos la nueva. Esto asegura que siempre se renderice.
+                        qrCodeInstance = null;
+                        qrCodeInstance = new QRCode(qrCodeContainer, {
+                            text: data.qr,
+                            width: 256,
+                            height: 256,
+                        });
+                        // -> FIN DE LA CORRECCIÓN
                     } else {
                         qrCodeContainer.innerHTML =
                             "<p>No hay código QR disponible.</p>";
@@ -306,7 +310,6 @@ Aquí aparecerán las respuestas del servidor...</pre
                         if (data.message) {
                             alert(data.message);
                         }
-                        // Verificamos el estado completo para ver si activamos el envío de mensajes
                         const statusResponse = await fetch(
                             `${API_BASE_URL}/api/sessions/${sessionId}/status`
                         );
@@ -324,7 +327,7 @@ Aquí aparecerán las respuestas del servidor...</pre
 
             refreshQrBtn.addEventListener("click", refreshQr);
 
-            // ENVIAR MENSAJE
+            // ENVIAR MENSAJES (Sin cambios)
             sendBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 const number = phoneNumberInput.value;
@@ -360,7 +363,7 @@ Aquí aparecerán las respuestas del servidor...</pre
                 }
             });
 
-            // DETENER SESIÓN
+            // DETENER SESIÓN (Sin cambios)
             stopBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 if (

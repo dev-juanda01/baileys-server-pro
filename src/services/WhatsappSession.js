@@ -1,9 +1,8 @@
-// src/services/WhatsappSession.js
-
-import pino from "pino";
 import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
+
+import pino from "pino";
 import {
     makeWASocket,
     useMultiFileAuthState,
@@ -11,13 +10,22 @@ import {
     fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
+
 import logger from "../utils/logger.js";
-import SessionManager from "./SessionManager.js"; // -> 1. Importar SessionManager para poder limpiar la sesión del map
+import SessionManager from "./SessionManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Represents a WhatsApp session, manages connection, authentication, message queue, and webhook integration.
+ */
 class WhatsappSession {
+    /**
+     * Create a new WhatsappSession instance.
+     * @param {string} sessionId - Unique session identifier.
+     * @param {string|null} [webhookUrl=null] - Optional webhook URL for incoming messages.
+     */
     constructor(sessionId, webhookUrl = null) {
         this.sessionId = sessionId;
         this.sock = null;
@@ -34,8 +42,15 @@ class WhatsappSession {
         this.retryCount = 0;
         this.maxRetry = 5;
         this.webhookUrl = webhookUrl;
+
+        this.messageQueue = [];
+        this.isProcessingQueue = false;
     }
 
+    /**
+     * Initializes the WhatsApp socket connection and authentication state.
+     * @returns {Promise<void>}
+     */
     async init() {
         try {
             const { state, saveCreds } = await useMultiFileAuthState(
@@ -52,10 +67,12 @@ class WhatsappSession {
             });
 
             this.sock.ev.on("messages.upsert", (m) => this.handleMessages(m));
+            
             this.sock.ev.on(
                 "connection.update",
                 this.handleConnectionUpdate.bind(this)
             );
+
             this.sock.ev.on("creds.update", saveCreds);
         } catch (error) {
             logger.error(
@@ -66,6 +83,11 @@ class WhatsappSession {
         }
     }
 
+    /**
+     * Handles incoming WhatsApp messages and sends them to the webhook if configured.
+     * @param {object} m - Baileys message upsert event object.
+     * @returns {Promise<void>}
+     */
     async handleMessages(m) {
         if (!this.webhookUrl) return;
 
@@ -109,10 +131,13 @@ class WhatsappSession {
         }
     }
 
+    /**
+     * Handles connection updates, manages QR code, reconnection logic, and session cleanup.
+     * @param {object} update - Baileys connection update event object.
+     */
     handleConnectionUpdate(update) {
         const { connection, lastDisconnect, qr } = update;
         this.status = connection || this.status;
-
         if (qr) this.qr = qr;
 
         logger.info(
@@ -120,9 +145,9 @@ class WhatsappSession {
         );
 
         if (connection === "close") {
-            const statusCode = lastDisconnect.error?.output?.statusCode;
+            const statusCode = (lastDisconnect.error instanceof Boom)?.output
+                ?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
             logger.warn(
                 `[${this.sessionId}] Conexión cerrada, motivo: ${statusCode}, reconectando: ${shouldReconnect}`
             );
@@ -130,7 +155,6 @@ class WhatsappSession {
             if (shouldReconnect) {
                 this.startReconnecting();
             } else {
-                // -> 2. Si es un logout permanente, llamamos a la función de limpieza
                 logger.warn(
                     `[${this.sessionId}] Sesión cerrada permanentemente (logout). Limpiando archivos...`
                 );
@@ -142,9 +166,13 @@ class WhatsappSession {
             );
             this.retryCount = 0;
             this.qr = null;
+            this.processMessageQueue();
         }
     }
 
+    /**
+     * Starts the reconnection process with exponential backoff and jitter.
+     */
     startReconnecting() {
         this.retryCount++;
 
@@ -161,7 +189,7 @@ class WhatsappSession {
         const jitter = Math.random() * 2000;
         const totalDelay = Math.min(exponentialDelay + jitter, 300000);
 
-        logger.warn(
+        logger.info(
             `[${this.sessionId}] Reintentando conexión... Intento #${
                 this.retryCount
             }. Esperando ${Math.round(totalDelay / 1000)} segundos.`
@@ -170,18 +198,95 @@ class WhatsappSession {
         setTimeout(() => this.init(), totalDelay);
     }
 
+    /**
+     * Sends a WhatsApp text message. If not connected, queues the message.
+     * @param {string} number - Recipient's phone number (with country code).
+     * @param {string} message - Text message to send.
+     * @returns {Promise<object>} Result object indicating success or queue status.
+     */
     async sendMessage(number, message) {
-        if (this.status !== "open") {
-            throw new Error("La sesión de WhatsApp no está abierta.");
+        logger.info(
+            `[${this.sessionId}] Solicitud para enviar mensaje. Estado actual: "${this.status}"`
+        );
+
+        if (this.status !== "open" || this.isProcessingQueue) {
+            this.messageQueue.push({ number, message });
+
+            const reason = this.isProcessingQueue
+                ? "Cola en proceso"
+                : "Conexión no disponible";
+            
+                logger.warn(
+                `[${this.sessionId}] Mensaje para ${number} encolado. Causa: ${reason}. Pendientes: ${this.messageQueue.length}`
+            );
+            
+            return {
+                success: true,
+                status: "queued",
+                message: "El mensaje ha sido encolado y se enviará en orden.",
+            };
         }
 
+        return this._performSendMessage(number, message);
+    }
+
+    /**
+     * Actually sends a WhatsApp text message using the socket.
+     * @param {string} number - Recipient's phone number or JID.
+     * @param {string} message - Text message to send.
+     * @returns {Promise<object>} Baileys sendMessage result.
+     * @private
+     */
+    async _performSendMessage(number, message) {
         const jid = number.includes("@s.whatsapp.net")
             ? number
             : `${number}@s.whatsapp.net`;
         return this.sock.sendMessage(jid, { text: message });
     }
 
-    // -> 3. Nuevo método para borrar la sesión del disco y de la memoria
+    /**
+     * Processes the message queue, sending messages in order when connected.
+     * @returns {Promise<void>}
+     */
+    async processMessageQueue() {
+        if (this.isProcessingQueue || this.messageQueue.length === 0) {
+            return;
+        }
+
+        this.isProcessingQueue = true;
+
+        logger.info(
+            `[${this.sessionId}] Iniciando procesamiento de cola. Mensajes pendientes: ${this.messageQueue.length}`
+        );
+
+        while (this.messageQueue.length > 0) {
+            const job = this.messageQueue.shift();
+            try {
+                await this._performSendMessage(job.number, job.message);
+                logger.info(
+                    `[${this.sessionId}] Mensaje encolado enviado a ${job.number}. Pendientes: ${this.messageQueue.length}`
+                );
+
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            } catch (error) {
+                logger.error(
+                    { error },
+                    `[${this.sessionId}] Error al enviar mensaje encolado a ${job.number}. Se re-encolará.`
+                );
+                
+                this.messageQueue.unshift(job);
+                break;
+            }
+        }
+
+        this.isProcessingQueue = false;
+        logger.info(`[${this.sessionId}] Procesamiento de cola finalizado.`);
+    }
+
+    /**
+     * Cleans up session files and removes the session from SessionManager.
+     * @returns {Promise<void>}
+     */
     async cleanup() {
         this.status = "close";
         try {
@@ -198,7 +303,10 @@ class WhatsappSession {
         }
     }
 
-    // -> 4. El logout ahora solo cierra la conexión. La limpieza la maneja 'connection.update'
+    /**
+     * Logs out from WhatsApp and closes the socket.
+     * @returns {Promise<void>}
+     */
     async logout() {
         if (this.sock) {
             await this.sock.logout();
