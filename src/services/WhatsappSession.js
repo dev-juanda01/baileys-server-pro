@@ -67,7 +67,7 @@ class WhatsappSession {
             });
 
             this.sock.ev.on("messages.upsert", (m) => this.handleMessages(m));
-            
+
             this.sock.ev.on(
                 "connection.update",
                 this.handleConnectionUpdate.bind(this)
@@ -147,7 +147,7 @@ class WhatsappSession {
         if (connection === "close") {
             const statusCode = lastDisconnect.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            
+
             logger.warn(
                 `[${this.sessionId}] Conexión cerrada, motivo: ${statusCode}, reconectando: ${shouldReconnect}`
             );
@@ -215,11 +215,11 @@ class WhatsappSession {
             const reason = this.isProcessingQueue
                 ? "Cola en proceso"
                 : "Conexión no disponible";
-            
-                logger.warn(
+
+            logger.warn(
                 `[${this.sessionId}] Mensaje para ${number} encolado. Causa: ${reason}. Pendientes: ${this.messageQueue.length}`
             );
-            
+
             return {
                 success: true,
                 status: "queued",
@@ -238,9 +238,7 @@ class WhatsappSession {
      * @private
      */
     async _performSendMessage(number, message) {
-        const jid = number.includes("@s.whatsapp.net")
-            ? number
-            : `${number}@s.whatsapp.net`;
+        const jid = number.includes("@") ? number : `${number}@s.whatsapp.net`;
         return this.sock.sendMessage(jid, { text: message });
     }
 
@@ -273,7 +271,7 @@ class WhatsappSession {
                     { error },
                     `[${this.sessionId}] Error al enviar mensaje encolado a ${job.number}. Se re-encolará.`
                 );
-                
+
                 this.messageQueue.unshift(job);
                 break;
             }
