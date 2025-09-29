@@ -262,6 +262,34 @@ class WhatsappSession {
     }
 
     /**
+     * Sends a document message. If not connected, throws an error.
+     * @param {string} recipient - Recipient's phone number (with country code) or JID.
+     * @param {string} filePath - The local path to the document file.
+     * @param {string} [fileName='document'] - Optional file name for the document.
+     * @param {string} [mimetype='application/octet-stream'] - Optional MIME type for the document.
+     * @returns {Promise<object>} A promise that resolves with the Baileys message object.
+     * @throws {Error} If the session is not 'open'.
+     */
+    async sendDocument(recipient, filePath, fileName, mimetype = 'application/octet-stream') {
+        logger.info(`[${this.sessionId}] Solicitud para enviar documento a ${recipient}. Estado: "${this.status}"`);
+        if (this.status !== "open") {
+            throw new Error("La sesión de WhatsApp no está abierta para enviar documentos.");
+        }
+
+        const jid = recipient.includes("@")
+            ? recipient
+            : `${recipient}@s.whatsapp.net`;
+        
+        const message = {
+            document: { url: filePath },
+            mimetype: mimetype, // -> Usa el mimetype dinámico
+            fileName: fileName || 'document'
+        };
+
+        return this.sock.sendMessage(jid, message);
+    }
+
+    /**
      * Actually sends a WhatsApp text message using the socket.
      * @param {string} number - Recipient's phone number or JID.
      * @param {string} message - Text message to send.

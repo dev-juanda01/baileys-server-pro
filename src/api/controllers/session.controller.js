@@ -190,12 +190,10 @@ class SessionController {
 
         if (!number || !file) {
             if (file) await fs.unlink(file.path); // Limpia el archivo si algo más faltó
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    message: "El número y el archivo de imagen son requeridos.",
-                });
+            return res.status(400).json({
+                success: false,
+                message: "El número y el archivo de imagen son requeridos.",
+            });
         }
 
         const session = SessionManager.getSession(sessionId);
@@ -222,6 +220,66 @@ class SessionController {
                 success: false,
                 message: "Error al enviar la imagen.",
                 error: error.message,
+            });
+        } finally {
+            await fs.unlink(file.path);
+        }
+    }
+
+    /**
+     * Sends a document message using a WhatsApp session.
+     * Requires the session to be open. Handles file upload via Multer.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId in params, number in body, and a document file from Multer.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     * @throws {Error} If the session is not found, required parameters are missing, or an error occurs during document sending.
+     */
+    async sendDocument(req, res) {
+        const { sessionId } = req.params;
+        const { number } = req.body;
+        const file = req.file;
+
+        if (!number || !file) {
+            if (file) await fs.unlink(file.path);
+            return res
+                .status(400)
+                .json({
+                    success: false,
+                    message:
+                        "El número y el archivo de documento son requeridos.",
+                });
+        }
+
+        const session = SessionManager.getSession(sessionId);
+        if (!session) {
+            await fs.unlink(file.path);
+            return res
+                .status(404)
+                .json({ success: false, message: "Sesión no encontrada." });
+        }
+
+        try {
+            // -> Pasamos la ruta, nombre original Y el mimetype del archivo
+            const result = await session.sendDocument(
+                number,
+                file.path,
+                file.originalname,
+                file.mimetype
+            );
+            res.status(200).json({
+                success: true,
+                message: "Documento enviado exitosamente.",
+                details: result,
+            });
+        } catch (error) {
+            logger.error(
+                { error },
+                `Error al enviar documento desde ${sessionId}`
+            );
+            res.status(500).json({
+                success: false,
+                message: "Error al enviar el documento.",
             });
         } finally {
             await fs.unlink(file.path);

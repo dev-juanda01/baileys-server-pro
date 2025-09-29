@@ -2,7 +2,7 @@ import multer from "multer";
 import { Router } from "express";
 import SessionController from "../controllers/session.controller.js";
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: "uploads/" });
 const router = Router();
 
 /**
@@ -155,7 +155,55 @@ router.post("/:sessionId/send-message", SessionController.sendMessage);
  *       '404':
  *         description: Sesión no encontrada.
  */
-router.post('/:sessionId/send-image', upload.single('image'), SessionController.sendImage);
+router.post(
+    "/:sessionId/send-image",
+    upload.single("image"),
+    SessionController.sendImage
+);
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/send-document:
+ *   post:
+ *     summary: Envía un mensaje con un documento (PDF, etc.)
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - document
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de teléfono del destinatario."
+ *               document:
+ *                 type: string
+ *                 format: binary
+ *                 description: "El archivo del documento a enviar."
+ *     responses:
+ *       '200':
+ *         description: Documento enviado exitosamente.
+ *       '400':
+ *         description: Faltan parámetros requeridos.
+ *       '404':
+ *         description: Sesión no encontrada.
+ */
+router.post(
+    "/:sessionId/send-document",
+    upload.single("document"),
+    SessionController.sendDocument
+);
 
 /**
  * @swagger
@@ -212,6 +260,6 @@ router.delete("/:sessionId/end", SessionController.end);
  *       '404':
  *         description: Session not found.
  */
-router.get('/:sessionId/qr', SessionController.getQrCode);
+router.get("/:sessionId/qr", SessionController.getQrCode);
 
 export default router;
