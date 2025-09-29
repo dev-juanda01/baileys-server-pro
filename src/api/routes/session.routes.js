@@ -1,6 +1,8 @@
+import multer from "multer";
 import { Router } from "express";
 import SessionController from "../controllers/session.controller.js";
 
+const upload = multer({ dest: 'uploads/' });
 const router = Router();
 
 /**
@@ -111,6 +113,49 @@ router.get("/:sessionId/status", SessionController.getStatus);
  *         description: La sesión no está abierta o lista para enviar mensajes.
  */
 router.post("/:sessionId/send-message", SessionController.sendMessage);
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/send-image:
+ *   post:
+ *     summary: Envía un mensaje con una imagen
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - image
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de teléfono del destinatario."
+ *               caption:
+ *                 type: string
+ *                 description: "Texto opcional que acompaña a la imagen."
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: "El archivo de imagen a enviar."
+ *     responses:
+ *       '200':
+ *         description: Imagen enviada exitosamente.
+ *       '400':
+ *         description: Faltan parámetros requeridos.
+ *       '404':
+ *         description: Sesión no encontrada.
+ */
+router.post('/:sessionId/send-image', upload.single('image'), SessionController.sendImage);
 
 /**
  * @swagger

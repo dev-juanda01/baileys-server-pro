@@ -18,9 +18,11 @@ COPY package*.json ./
 RUN npm install --omit=dev --clean
 COPY --from=builder /usr/src/app .
 
+# -> Crea la carpeta de uploads antes de cambiar de usuario
+RUN mkdir -p /usr/src/app/uploads
+
 EXPOSE 3000
 
-# -> ¡CAMBIO CLAVE AQUÍ!
 # Le damos al usuario 'node' la propiedad del directorio de la aplicación
 # para que pueda crear la carpeta 'sessions' y escribir en ella.
 RUN chown -R node:node /usr/src/app

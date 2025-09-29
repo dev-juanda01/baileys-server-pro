@@ -9,7 +9,6 @@ import {
     DisconnectReason,
     fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
-import { Boom } from "@hapi/boom";
 
 import logger from "../utils/logger.js";
 import SessionManager from "./SessionManager.js";
@@ -228,6 +227,38 @@ class WhatsappSession {
         }
 
         return this._performSendMessage(number, message);
+    }
+
+    /**
+     * Sends an image message. If not connected, throws an error.
+     * @param {string} recipient - Recipient's phone number (with country code) or JID.
+     * @param {string} filePath - The local path to the image file.
+     * @param {string} [caption=""] - Optional caption for the image.
+     * @returns {Promise<object>} A promise that resolves with the Baileys message object.
+     * @throws {Error} If the session is not 'open'.
+     */
+    async sendImage(recipient, filePath, caption = "") {
+        logger.info(
+            `[${this.sessionId}] Solicitud para enviar imagen a ${recipient}. Estado: "${this.status}"`
+        );
+        if (this.status !== "open") {
+            // Nota: La cola para archivos es más compleja de implementar.
+            // Por ahora, lanzamos un error si no estamos conectados.
+            throw new Error(
+                "La sesión de WhatsApp no está abierta para enviar imágenes."
+            );
+        }
+
+        const jid = recipient.includes("@")
+            ? recipient
+            : `${recipient}@s.whatsapp.net`;
+
+        const message = {
+            image: { url: filePath },
+            caption: caption,
+        };
+
+        return this.sock.sendMessage(jid, message);
     }
 
     /**

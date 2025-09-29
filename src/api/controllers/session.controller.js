@@ -1,4 +1,4 @@
-// src/api/controllers/session.controller.js
+import fs from "fs/promises";
 import SessionManager from "../../services/SessionManager.js";
 import logger from "../../utils/logger.js";
 
@@ -17,12 +17,10 @@ class SessionController {
     async start(req, res) {
         const { sessionId, webhook } = req.body;
         if (!sessionId) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    message: "El campo sessionId es requerido.",
-                });
+            return res.status(400).json({
+                success: false,
+                message: "El campo sessionId es requerido.",
+            });
         }
 
         try {
@@ -91,7 +89,7 @@ class SessionController {
             logger.info(
                 `[${sessionId}] Solicitud de QR para sesión fallida. Reiniciando desde 'qr'`
             );
-            
+
             session.retryCount = 0;
             session.status = "starting";
             await session.init();
@@ -108,24 +106,20 @@ class SessionController {
         }
 
         if (session.status === "open") {
-            return res
-                .status(200)
-                .json({
-                    success: true,
-                    qr: null,
-                    message: "La sesión ya está conectada.",
-                });
+            return res.status(200).json({
+                success: true,
+                qr: null,
+                message: "La sesión ya está conectada.",
+            });
         }
 
         if (!session.qr) {
-            return res
-                .status(200)
-                .json({
-                    success: true,
-                    qr: null,
-                    message:
-                        "El código QR no está disponible o está siendo generado.",
-                });
+            return res.status(200).json({
+                success: true,
+                qr: null,
+                message:
+                    "El código QR no está disponible o está siendo generado.",
+            });
         }
 
         res.status(200).json({
@@ -146,12 +140,10 @@ class SessionController {
         const { number, message } = req.body;
 
         if (!number || !message) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    message: "Los campos number y message son requeridos.",
-                });
+            return res.status(400).json({
+                success: false,
+                message: "Los campos number y message son requeridos.",
+            });
         }
 
         const session = SessionManager.getSession(sessionId);
@@ -179,6 +171,60 @@ class SessionController {
                 message: "Error al enviar el mensaje.",
                 error: error.message,
             });
+        }
+    }
+
+    /**
+     * Sends an image message using a WhatsApp session.
+     * Requires the session to be open. Handles file upload via Multer.
+     * @async
+     * @param {import('express').Request} req - Express request object. Requires sessionId in params, number and optional caption in body, and an image file from Multer.
+     * @param {import('express').Response} res - Express response object.
+     * @returns {Promise<void>}
+     * @throws {Error} If the session is not found, required parameters are missing, or an error occurs during image sending.
+     */
+    async sendImage(req, res) {
+        const { sessionId } = req.params;
+        const { number, caption } = req.body;
+        const file = req.file; // multer nos da el archivo aquí
+
+        if (!number || !file) {
+            if (file) await fs.unlink(file.path); // Limpia el archivo si algo más faltó
+            return res
+                .status(400)
+                .json({
+                    success: false,
+                    message: "El número y el archivo de imagen son requeridos.",
+                });
+        }
+
+        const session = SessionManager.getSession(sessionId);
+        if (!session) {
+            await fs.unlink(file.path); // Limpia el archivo si la sesión no existe
+            return res
+                .status(404)
+                .json({ success: false, message: "Sesión no encontrada." });
+        }
+
+        try {
+            const result = await session.sendImage(number, file.path, caption);
+            res.status(200).json({
+                success: true,
+                message: "Imagen enviada exitosamente.",
+                details: result,
+            });
+        } catch (error) {
+            logger.error(
+                { error },
+                `Error al enviar imagen desde ${sessionId}`
+            );
+            res.status(500).json({
+                success: false,
+                message: "Error al enviar la imagen.",
+                error: error.message,
+            });
+        } finally {
+            await fs.unlink(file.path);
         }
     }
 
