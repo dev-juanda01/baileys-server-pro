@@ -8,6 +8,7 @@ import {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
+    downloadMediaMessage, // -> IMPORTADO PARA DESCARGAR ARCHIVOS
 } from "@whiskeysockets/baileys";
 
 import logger from "../utils/logger.js";
@@ -83,7 +84,7 @@ class WhatsappSession {
     }
 
     /**
-     * Handles incoming WhatsApp messages and sends them to the webhook if configured.
+     * Handles incoming WhatsApp messages, downloads media, and sends them to the webhook.
      * @param {object} m - Baileys message upsert event object.
      * @returns {Promise<void>}
      */
@@ -99,33 +100,91 @@ class WhatsappSession {
         logger.info(
             `[${this.sessionId}] Mensaje recibido de ${msg.key.remoteJid}`
         );
+        
+        // Identifica el tipo de mensaje
+        const messageType = Object.keys(msg.message).find(key => key !== 'messageContextInfo');
 
+        // Construye el payload base del webhook
         const payload = {
             sessionId: this.sessionId,
             timestamp: new Date().toISOString(),
             message: {
                 id: msg.key.id,
                 from: msg.key.remoteJid,
-                text:
-                    msg.message.conversation ||
-                    msg.message.extendedTextMessage?.text ||
-                    "",
+                senderName: msg.pushName,
+                type: messageType,
+                text: null,
+                media: null,
+                mimetype: null,
+                fileName: null,
             },
         };
 
         try {
+            let buffer; // Buffer para almacenar la media descargada
+
+            // Procesa el mensaje según su tipo
+            switch (messageType) {
+                case 'conversation':
+                    payload.message.text = msg.message.conversation;
+                    break;
+                
+                case 'extendedTextMessage':
+                    payload.message.text = msg.message.extendedTextMessage.text;
+                    break;
+                
+                case 'imageMessage':
+                    payload.message.text = msg.message.imageMessage.caption;
+                    payload.message.mimetype = msg.message.imageMessage.mimetype;
+                    buffer = await downloadMediaMessage(msg, 'buffer');
+                    payload.message.media = buffer.toString('base64');
+                    break;
+                
+                case 'videoMessage':
+                    payload.message.text = msg.message.videoMessage.caption;
+                    payload.message.mimetype = msg.message.videoMessage.mimetype;
+                    buffer = await downloadMediaMessage(msg, 'buffer');
+                    payload.message.media = buffer.toString('base64');
+                    break;
+                
+                case 'audioMessage':
+                    payload.message.mimetype = msg.message.audioMessage.mimetype;
+                    buffer = await downloadMediaMessage(msg, 'buffer');
+                    payload.message.media = buffer.toString('base64');
+                    break;
+
+                case 'documentMessage':
+                    payload.message.mimetype = msg.message.documentMessage.mimetype;
+                    payload.message.fileName = msg.message.documentMessage.fileName;
+                    buffer = await downloadMediaMessage(msg, 'buffer');
+                    payload.message.media = buffer.toString('base64');
+                    break;
+
+                case 'stickerMessage':
+                    payload.message.mimetype = msg.message.stickerMessage.mimetype;
+                    buffer = await downloadMediaMessage(msg, 'buffer');
+                    payload.message.media = buffer.toString('base64');
+                    break;
+                
+                default:
+                    logger.warn(`[${this.sessionId}] Tipo de mensaje no manejado para descarga: ${messageType}`);
+                    payload.message.type = 'unsupported';
+            }
+
+            // Envía el payload completo al webhook
             await fetch(this.webhookUrl, {
                 method: "POST",
                 body: JSON.stringify(payload),
                 headers: { "Content-Type": "application/json" },
             });
             logger.info(
-                `[${this.sessionId}] Webhook enviado a ${this.webhookUrl}`
+                `[${this.sessionId}] Webhook enviado a ${this.webhookUrl} (Tipo: ${messageType})`
             );
+
         } catch (error) {
             logger.error(
                 { error },
-                `[${this.sessionId}] Error al enviar el webhook`
+                `[${this.sessionId}] Error al procesar mensaje o enviar el webhook`
             );
         }
     }
@@ -242,8 +301,6 @@ class WhatsappSession {
             `[${this.sessionId}] Solicitud para enviar imagen a ${recipient}. Estado: "${this.status}"`
         );
         if (this.status !== "open") {
-            // Nota: La cola para archivos es más compleja de implementar.
-            // Por ahora, lanzamos un error si no estamos conectados.
             throw new Error(
                 "La sesión de WhatsApp no está abierta para enviar imágenes."
             );
@@ -282,7 +339,7 @@ class WhatsappSession {
         
         const message = {
             document: { url: filePath },
-            mimetype: mimetype, // -> Usa el mimetype dinámico
+            mimetype: mimetype, 
             fileName: fileName || 'document'
         };
 
