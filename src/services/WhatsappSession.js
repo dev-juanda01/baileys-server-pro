@@ -8,11 +8,13 @@ import {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
-    downloadMediaMessage, // -> IMPORTADO PARA DESCARGAR ARCHIVOS
+    downloadMediaMessage,
 } from "@whiskeysockets/baileys";
+import { Boom } from "@hapi/boom";
 
 import logger from "../utils/logger.js";
 import SessionManager from "./SessionManager.js";
+import { sendEmailAlert } from "../utils/notification.js"; // Asegúrate de que este archivo exista
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +47,10 @@ class WhatsappSession {
 
         this.messageQueue = [];
         this.isProcessingQueue = false;
+
+        this.webhookQueue = [];
+        this.isProcessingWebhookQueue = false;
+        this.maxWebhookRetries = 3; // Límite de reintentos para el webhook
     }
 
     /**
@@ -84,7 +90,7 @@ class WhatsappSession {
     }
 
     /**
-     * Handles incoming WhatsApp messages, downloads media, and sends them to the webhook.
+     * Handles incoming WhatsApp messages, downloads media, and queues them for webhook processing.
      * @param {object} m - Baileys message upsert event object.
      * @returns {Promise<void>}
      */
@@ -98,13 +104,11 @@ class WhatsappSession {
         }
 
         logger.info(
-            `[${this.sessionId}] Mensaje recibido de ${msg.key.remoteJid}`
+            `[${this.sessionId}] Mensaje recibido de ${msg.key.remoteJid}, encolando para webhook.`
         );
         
-        // Identifica el tipo de mensaje
         const messageType = Object.keys(msg.message).find(key => key !== 'messageContextInfo');
 
-        // Construye el payload base del webhook
         const payload = {
             sessionId: this.sessionId,
             timestamp: new Date().toISOString(),
@@ -121,70 +125,69 @@ class WhatsappSession {
         };
 
         try {
-            let buffer; // Buffer para almacenar la media descargada
+            let buffer;
 
-            // Procesa el mensaje según su tipo
             switch (messageType) {
                 case 'conversation':
                     payload.message.text = msg.message.conversation;
                     break;
-                
                 case 'extendedTextMessage':
                     payload.message.text = msg.message.extendedTextMessage.text;
                     break;
-                
                 case 'imageMessage':
                     payload.message.text = msg.message.imageMessage.caption;
                     payload.message.mimetype = msg.message.imageMessage.mimetype;
                     buffer = await downloadMediaMessage(msg, 'buffer');
                     payload.message.media = buffer.toString('base64');
                     break;
-                
                 case 'videoMessage':
                     payload.message.text = msg.message.videoMessage.caption;
                     payload.message.mimetype = msg.message.videoMessage.mimetype;
                     buffer = await downloadMediaMessage(msg, 'buffer');
                     payload.message.media = buffer.toString('base64');
                     break;
-                
                 case 'audioMessage':
                     payload.message.mimetype = msg.message.audioMessage.mimetype;
                     buffer = await downloadMediaMessage(msg, 'buffer');
                     payload.message.media = buffer.toString('base64');
                     break;
-
                 case 'documentMessage':
                     payload.message.mimetype = msg.message.documentMessage.mimetype;
                     payload.message.fileName = msg.message.documentMessage.fileName;
                     buffer = await downloadMediaMessage(msg, 'buffer');
                     payload.message.media = buffer.toString('base64');
                     break;
-
                 case 'stickerMessage':
                     payload.message.mimetype = msg.message.stickerMessage.mimetype;
                     buffer = await downloadMediaMessage(msg, 'buffer');
                     payload.message.media = buffer.toString('base64');
                     break;
-                
                 default:
-                    logger.warn(`[${this.sessionId}] Tipo de mensaje no manejado para descarga: ${messageType}`);
                     payload.message.type = 'unsupported';
             }
 
-            // Envía el payload completo al webhook
-            await fetch(this.webhookUrl, {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" },
-            });
-            logger.info(
-                `[${this.sessionId}] Webhook enviado a ${this.webhookUrl} (Tipo: ${messageType})`
-            );
+            // -> Crea un "job" que incluye el payload y un contador de reintentos
+            const job = {
+                payload: payload,
+                retryCount: 0
+            };
 
+            this.webhookQueue.push(job);
+            this.processWebhookQueue();
         } catch (error) {
             logger.error(
                 { error },
-                `[${this.sessionId}] Error al procesar mensaje o enviar el webhook`
+                `[${this.sessionId}] Error al descargar o procesar el mensaje entrante.`
+            );
+
+            sendEmailAlert(
+                `Fallo al procesar mensaje entrante (${this.sessionId})`,
+                `<p>Ocurrió un error crítico al intentar descargar o procesar un mensaje de la sesión <strong>${this.sessionId}</strong>.</p>
+                 <p>Este mensaje no pudo ser encolado y se ha perdido.</p>
+                 <p><strong>Error:</strong> ${error.message}</p>
+                 <hr>
+                 <p><strong>Mensaje original (sin media):</strong></p>
+                 <pre>${JSON.stringify(msg, null, 2)}</pre>`
             );
         }
     }
@@ -206,6 +209,8 @@ class WhatsappSession {
             const statusCode = lastDisconnect.error?.output?.statusCode;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
+            console.log(update);
+            
             logger.warn(
                 `[${this.sessionId}] Conexión cerrada, motivo: ${statusCode}, reconectando: ${shouldReconnect}`
             );
@@ -225,6 +230,7 @@ class WhatsappSession {
             this.retryCount = 0;
             this.qr = null;
             this.processMessageQueue();
+            this.processWebhookQueue(); 
         }
     }
 
@@ -339,7 +345,7 @@ class WhatsappSession {
         
         const message = {
             document: { url: filePath },
-            mimetype: mimetype, 
+            mimetype: mimetype,
             fileName: fileName || 'document'
         };
 
@@ -396,6 +402,95 @@ class WhatsappSession {
         this.isProcessingQueue = false;
         logger.info(`[${this.sessionId}] Procesamiento de cola finalizado.`);
     }
+
+    /**
+     * Processes the webhook queue, sending payloads in order to the webhook URL.
+     * @returns {Promise<void>}
+     */
+    async processWebhookQueue() {
+        if (this.isProcessingWebhookQueue || this.webhookQueue.length === 0) {
+            return;
+        }
+
+        this.isProcessingWebhookQueue = true;
+        logger.info(
+            `[${this.sessionId}] Iniciando procesamiento de cola de webhooks. Pendientes: ${this.webhookQueue.length}`
+        );
+
+        while (this.webhookQueue.length > 0) {
+            const job = this.webhookQueue.shift(); // Saca el job { payload, retryCount }
+            try {
+                const response = await fetch(this.webhookUrl, {
+                    method: 'POST',
+                    body: JSON.stringify(job.payload),
+                    headers: { 'Content-Type': 'application/json' },
+                    // signal: AbortSignal.timeout(5000) // 5s timeout (Requiere Node v17.3.0+)
+                });
+
+                if (response.ok) {
+                    // Éxito (200-299)
+                    logger.info(`[${this.sessionId}] Webhook encolado enviado. Pendientes: ${this.webhookQueue.length}`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } else if (response.status >= 400 && response.status < 500) {
+                    // Error permanente (4xx) - No reintentar y Notificar
+                    const errorMsg = `[${this.sessionId}] Error permanente al enviar webhook (Status: ${response.status}). Mensaje descartado.`;
+                    logger.error(errorMsg);
+                    
+                    sendEmailAlert(
+                        `Fallo permanente de Webhook (${this.sessionId}) - Mensaje Descartado`,
+                        `<p>Un mensaje de la sesión <strong>${this.sessionId}</strong> fue descartado permanentemente.</p>
+                         <p>El servidor del webhook respondió con un código de error <strong>${response.status}</strong>, lo que indica que el mensaje no debe ser reintentado.</p>
+                         <p><strong>Destino:</strong> ${this.webhookUrl}</p>
+                         <hr>
+                         <p><strong>Payload Descartado:</strong></p>
+                         <pre>${JSON.stringify(job.payload, null, 2)}</pre>`
+                    );
+                } else {
+                    // Error temporal (5xx) - Reintentar
+                    throw new Error(`Webhook server returned status ${response.status}`);
+                }
+            } catch (error) {
+                // Error de red, timeout, o error 5xx
+                job.retryCount++; // Incrementa el contador de reintentos
+                
+                if (job.retryCount >= this.maxWebhookRetries) {
+                    // -> LÍMITE DE REINTENTOS ALCANZADO
+                    logger.error(
+                        { error: error.message },
+                        `[${this.sessionId}] Fallo al enviar webhook después de ${this.maxWebhookRetries} intentos. Mensaje descartado.`
+                    );
+                    
+                    sendEmailAlert(
+                        `Fallo Crítico de Webhook (${this.sessionId}) - Mensaje Descartado tras 3 reintentos`,
+                        `<p>Un mensaje de la sesión <strong>${this.sessionId}</strong> fue descartado permanentemente después de ${this.maxWebhookRetries} reintentos fallidos.</p>
+                         <p>El servidor del webhook parece estar caído o inaccesible.</p>
+                         <p><strong>Destino:</strong> ${this.webhookUrl}</p>
+                         <p><strong>Último Error:</strong> ${error.message}</p>
+                         <hr>
+                         <p><strong>Payload Descartado:</strong></p>
+                         <pre>${JSON.stringify(job.payload, null, 2)}</pre>`
+                    );
+                } else {
+                    // -> AÚN QUEDAN REINTENTOS
+                    logger.warn(
+                        { error: error.message },
+                        `[${this.sessionId}] Error al enviar webhook, re-encolando. Intento ${job.retryCount}/${this.maxWebhookRetries}. Se reintentará en 10s. Pendientes: ${this.webhookQueue.length + 1}`
+                    );
+                    this.webhookQueue.unshift(job); // Devolver al inicio de la cola
+                    
+                    setTimeout(() => {
+                        this.isProcessingWebhookQueue = false;
+                        this.processWebhookQueue();
+                    }, 10000); // 10 segundos de espera
+                    return; // Salir del método
+                }
+            }
+        }
+        
+        this.isProcessingWebhookQueue = false;
+        logger.info(`[${this.sessionId}] Procesamiento de cola de webhooks finalizado.`);
+    }
+
 
     /**
      * Cleans up session files and removes the session from SessionManager.
