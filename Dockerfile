@@ -1,7 +1,7 @@
 # Dockerfile
 
 # --- Etapa 1: Builder ---
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 RUN apk add --no-cache git
 COPY package*.json ./
@@ -9,7 +9,7 @@ RUN npm install
 COPY . .
 
 # --- Etapa 2: Producción ---
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /usr/src/app
 
 ENV NODE_ENV=production
