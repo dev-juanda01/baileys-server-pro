@@ -207,6 +207,97 @@ router.post(
 
 /**
  * @swagger
+ * /api/sessions/{sessionId}/send-audio:
+ *   post:
+ *     summary: Envía un mensaje con un archivo de audio
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - audio
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de teléfono del destinatario (ej: 573001234567)."
+ *               audio:
+ *                 type: string
+ *                 format: binary
+ *                 description: "El archivo de audio a enviar (ej. mp3, ogg)."
+ *     responses:
+ *       '200':
+ *         description: Audio enviado exitosamente.
+ *       '400':
+ *         description: Faltan parámetros requeridos.
+ *       '404':
+ *         description: Sesión no encontrada.
+ */
+router.post(
+    "/:sessionId/send-audio",
+    upload.single("audio"),
+    SessionController.sendAudio
+);
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/send-video:
+ *   post:
+ *     summary: Envía un mensaje con un archivo de video
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - video
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de teléfono del destinatario (ej: 573001234567)."
+ *               caption:
+ *                 type: string
+ *                 description: "Texto opcional que acompaña al video."
+ *               video:
+ *                 type: string
+ *                 format: binary
+ *                 description: "El archivo de video a enviar (ej. mp4)."
+ *     responses:
+ *       '200':
+ *         description: Video enviado exitosamente.
+ *       '400':
+ *         description: Faltan parámetros requeridos.
+ *       '404':
+ *         description: Sesión no encontrada.
+ */
+router.post(
+    "/:sessionId/send-video",
+    upload.single("video"),
+    SessionController.sendVideo
+);
+
+/**
+ * @swagger
  * /api/sessions/{sessionId}/end:
  *   delete:
  *     summary: Cierra una sesión y elimina sus datos

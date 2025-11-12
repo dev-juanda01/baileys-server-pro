@@ -50,7 +50,7 @@ class WhatsappSession {
 
         this.webhookQueue = [];
         this.isProcessingWebhookQueue = false;
-        this.maxWebhookRetries = 3; // Límite de reintentos para el webhook
+        this.maxWebhookRetries = 3;
     }
 
     /**
@@ -90,7 +90,7 @@ class WhatsappSession {
     }
 
     /**
-     * Handles incoming WhatsApp messages, queues them for webhook processing.
+     * Handles incoming WhatsApp messages, downloads media, and queues them for webhook processing.
      * @param {object} m - Baileys message upsert event object.
      * @returns {Promise<void>}
      */
@@ -107,14 +107,12 @@ class WhatsappSession {
             `[${this.sessionId}] Mensaje recibido de ${msg.key.remoteJid}, encolando para procesamiento.`
         );
 
-        // Simplemente encola el mensaje crudo. El procesamiento se hará en la cola.
         const job = {
             rawMessage: msg,
             retryCount: 0,
         };
         this.webhookQueue.push(job);
 
-        // Inicia el procesador de la cola (no lo esperamos)
         this.processWebhookQueue();
     }
 
@@ -219,12 +217,10 @@ class WhatsappSession {
     }
 
     /**
-     * Sends an image message. If not connected, throws an error.
-     * @param {string} recipient - Recipient's phone number (with country code) or JID.
+     * Sends an image message.
+     * @param {string} recipient - Recipient's JID or phone number.
      * @param {string} filePath - The local path to the image file.
-     * @param {string} [caption=""] - Optional caption for the image.
-     * @returns {Promise<object>} A promise that resolves with the Baileys message object.
-     * @throws {Error} If the session is not 'open'.
+     * @param {string} [caption=""] - Optional caption.
      */
     async sendImage(recipient, filePath, caption = "") {
         logger.info(
@@ -249,13 +245,11 @@ class WhatsappSession {
     }
 
     /**
-     * Sends a document message. If not connected, throws an error.
-     * @param {string} recipient - Recipient's phone number (with country code) or JID.
+     * Sends a document message.
+     * @param {string} recipient - Recipient's JID or phone number.
      * @param {string} filePath - The local path to the document file.
-     * @param {string} [fileName='document'] - Optional file name for the document.
-     * @param {string} [mimetype='application/octet-stream'] - Optional MIME type for the document.
-     * @returns {Promise<object>} A promise that resolves with the Baileys message object.
-     * @throws {Error} If the session is not 'open'.
+     * @param {string} [fileName='document'] - Optional file name.
+     * @param {string} [mimetype='application/octet-stream'] - Optional MIME type.
      */
     async sendDocument(
         recipient,
@@ -282,6 +276,58 @@ class WhatsappSession {
             fileName: fileName || "document",
         };
 
+        return this.sock.sendMessage(jid, message);
+    }
+
+    /**
+     * Sends an audio message.
+     * @param {string} recipient - Recipient's JID or phone number.
+     * @param {string} filePath - The local path to the audio file.
+     * @param {string} [mimetype='audio/mpeg'] - Optional MIME type.
+     */
+    async sendAudio(recipient, filePath, mimetype = "audio/mpeg") {
+        logger.info(
+            `[${this.sessionId}] Solicitud para enviar audio a ${recipient}. Estado: "${this.status}"`
+        );
+        if (this.status !== "open") {
+            throw new Error(
+                "La sesión de WhatsApp no está abierta para enviar audio."
+            );
+        }
+        const jid = recipient.includes("@")
+            ? recipient
+            : `${recipient}@s.whatsapp.net`;
+
+        const message = {
+            audio: { url: filePath },
+            mimetype: mimetype,
+        };
+        return this.sock.sendMessage(jid, message);
+    }
+
+    /**
+     * Sends a video message.
+     * @param {string} recipient - Recipient's JID or phone number.
+     * @param {string} filePath - The local path to the video file.
+     * @param {string} [caption=""] - Optional caption.
+     */
+    async sendVideo(recipient, filePath, caption = "") {
+        logger.info(
+            `[${this.sessionId}] Solicitud para enviar video a ${recipient}. Estado: "${this.status}"`
+        );
+        if (this.status !== "open") {
+            throw new Error(
+                "La sesión de WhatsApp no está abierta para enviar video."
+            );
+        }
+        const jid = recipient.includes("@")
+            ? recipient
+            : `${recipient}@s.whatsapp.net`;
+
+        const message = {
+            video: { url: filePath },
+            caption: caption,
+        };
         return this.sock.sendMessage(jid, message);
     }
 
@@ -421,12 +467,10 @@ class WhatsappSession {
                         payload.message.type = "unsupported";
                 }
 
-                // -> 2. ENVÍO AL WEBHOOK
                 const response = await fetch(this.webhookUrl, {
                     method: "POST",
                     body: JSON.stringify(payload),
                     headers: { "Content-Type": "application/json" },
-                    // signal: AbortSignal.timeout(5000) // 5s timeout (Requiere Node v17.3.0+)
                 });
 
                 if (response.ok) {
@@ -452,13 +496,11 @@ class WhatsappSession {
                          <pre>${JSON.stringify(payload, null, 2)}</pre>`
                     );
                 } else {
-                    // Error temporal (5xx)
                     throw new Error(
                         `Webhook server returned status ${response.status}`
                     );
                 }
             } catch (error) {
-                // -> 3. MANEJO DE REINTENTOS (PARA DESCARGA O ENVÍO)
                 job.retryCount++;
 
                 if (job.retryCount >= this.maxWebhookRetries) {

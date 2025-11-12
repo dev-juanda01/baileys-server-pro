@@ -169,9 +169,7 @@
             <div id="send-message-card" class="card" style="display: none">
                 <h2>4. Enviar Mensaje</h2>
                 <div class="form-group">
-                    <label for="phone-number"
-                        >Número de Teléfono (con código de país)</label
-                    >
+                    <label for="phone-number">Número de Teléfono</label>
                     <input
                         type="text"
                         id="phone-number"
@@ -189,8 +187,98 @@
                 <button id="send-message">Enviar Mensaje</button>
             </div>
 
+            <div id="send-image-card" class="card" style="display: none">
+                <h2>5. Enviar Imagen</h2>
+                <div class="form-group">
+                    <label for="image-phone-number">Número de Teléfono</label>
+                    <input
+                        type="text"
+                        id="image-phone-number"
+                        placeholder="Ej: 573001234567"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="image-caption">Texto (Opcional)</label>
+                    <input
+                        type="text"
+                        id="image-caption"
+                        placeholder="Escribe un texto para la imagen..."
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="image-file">Selecciona una imagen</label>
+                    <input type="file" id="image-file" accept="image/*" />
+                </div>
+                <button id="send-image">Enviar Imagen</button>
+            </div>
+
+            <div id="send-document-card" class="card" style="display: none">
+                <h2>6. Enviar Documento</h2>
+                <div class="form-group">
+                    <label for="document-phone-number"
+                        >Número de Teléfono</label
+                    >
+                    <input
+                        type="text"
+                        id="document-phone-number"
+                        placeholder="Ej: 573001234567"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="document-file"
+                        >Selecciona un documento (PDF, etc.)</label
+                    >
+                    <input type="file" id="document-file" />
+                </div>
+                <button id="send-document">Enviar Documento</button>
+            </div>
+
+            <div id="send-audio-card" class="card" style="display: none">
+                <h2>7. Enviar Audio</h2>
+                <div class="form-group">
+                    <label for="audio-phone-number">Número de Teléfono</label>
+                    <input
+                        type="text"
+                        id="audio-phone-number"
+                        placeholder="Ej: 573001234567"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="audio-file"
+                        >Selecciona un archivo de audio</label
+                    >
+                    <input type="file" id="audio-file" accept="audio/*" />
+                </div>
+                <button id="send-audio">Enviar Audio</button>
+            </div>
+
+            <div id="send-video-card" class="card" style="display: none">
+                <h2>8. Enviar Video</h2>
+                <div class="form-group">
+                    <label for="video-phone-number">Número de Teléfono</label>
+                    <input
+                        type="text"
+                        id="video-phone-number"
+                        placeholder="Ej: 573001234567"
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="video-caption">Texto (Opcional)</label>
+                    <input
+                        type="text"
+                        id="video-caption"
+                        placeholder="Escribe un texto para el video..."
+                    />
+                </div>
+                <div class="form-group">
+                    <label for="video-file">Selecciona un video</label>
+                    <input type="file" id="video-file" accept="video/*" />
+                </div>
+                <button id="send-video">Enviar Video</button>
+            </div>
+
             <div class="card">
-                <h2>Log de Respuestas de la API</h2>
+                <h2>9. Log de Respuestas de la API</h2>
                 <pre id="api-response">
 Aquí aparecerán las respuestas del servidor...</pre
                 >
@@ -207,12 +295,46 @@ Aquí aparecerán las respuestas del servidor...</pre
             const stopBtn = document.getElementById("stop-session");
             const qrCodeContainer = document.getElementById("qr-code");
             const refreshQrBtn = document.getElementById("refresh-qr");
+            const apiResponseLog = document.getElementById("api-response");
+
+            // Tarjeta de Enviar Mensaje
             const sendMessageCard =
                 document.getElementById("send-message-card");
             const phoneNumberInput = document.getElementById("phone-number");
             const messageInput = document.getElementById("message");
             const sendBtn = document.getElementById("send-message");
-            const apiResponseLog = document.getElementById("api-response");
+
+            // Tarjeta de Enviar Imagen
+            const sendImageCard = document.getElementById("send-image-card");
+            const imagePhoneNumberInput =
+                document.getElementById("image-phone-number");
+            const imageCaptionInput = document.getElementById("image-caption");
+            const imageFileInput = document.getElementById("image-file");
+            const sendImageBtn = document.getElementById("send-image");
+
+            // Tarjeta de Enviar Documento
+            const sendDocumentCard =
+                document.getElementById("send-document-card");
+            const documentPhoneNumberInput = document.getElementById(
+                "document-phone-number"
+            );
+            const documentFileInput = document.getElementById("document-file");
+            const sendDocumentBtn = document.getElementById("send-document");
+
+            // Tarjeta de Enviar Audio
+            const sendAudioCard = document.getElementById("send-audio-card");
+            const audioPhoneNumberInput =
+                document.getElementById("audio-phone-number");
+            const audioFileInput = document.getElementById("audio-file");
+            const sendAudioBtn = document.getElementById("send-audio");
+
+            // Tarjeta de Enviar Video
+            const sendVideoCard = document.getElementById("send-video-card");
+            const videoPhoneNumberInput =
+                document.getElementById("video-phone-number");
+            const videoCaptionInput = document.getElementById("video-caption");
+            const videoFileInput = document.getElementById("video-file");
+            const sendVideoBtn = document.getElementById("send-video");
 
             let qrCodeInstance = null;
 
@@ -230,6 +352,10 @@ Aquí aparecerán las respuestas del servidor...</pre
                     ? "inline-block"
                     : "none";
                 sendMessageCard.style.display = isConnected ? "block" : "none";
+                sendImageCard.style.display = isConnected ? "block" : "none";
+                sendDocumentCard.style.display = isConnected ? "block" : "none";
+                sendAudioCard.style.display = isConnected ? "block" : "none";
+                sendVideoCard.style.display = isConnected ? "block" : "none";
             }
 
             // INICIAR SESIÓN
@@ -271,11 +397,11 @@ Aquí aparecerán las respuestas del servidor...</pre
                 }
             });
 
-            // REFRESCAR QR (LÓGICA ACTUALIZADA)
+            // REFRESCAR QR
             async function refreshQr() {
                 const sessionId = sessionIdInput.value;
                 qrCodeContainer.innerHTML =
-                    "<p>Refrescando QR, por favor espera...</p>"; // Mensaje de carga
+                    "<p>Refrescando QR, por favor espera...</p>";
 
                 try {
                     const response = await fetch(
@@ -290,19 +416,15 @@ Aquí aparecerán las respuestas del servidor...</pre
                         return;
                     }
 
-                    qrCodeContainer.innerHTML = ""; // Limpiamos el contenedor antes de decidir qué hacer
+                    qrCodeContainer.innerHTML = "";
 
                     if (data.qr) {
-                        // -> INICIO DE LA CORRECCIÓN
-                        // Si la instancia ya existe, la limpiamos antes de crear una nueva.
-                        // Si no, simplemente creamos la nueva. Esto asegura que siempre se renderice.
                         qrCodeInstance = null;
                         qrCodeInstance = new QRCode(qrCodeContainer, {
                             text: data.qr,
                             width: 256,
                             height: 256,
                         });
-                        // -> FIN DE LA CORRECCIÓN
                     } else {
                         qrCodeContainer.innerHTML =
                             "<p>No hay código QR disponible.</p>";
@@ -327,7 +449,7 @@ Aquí aparecerán las respuestas del servidor...</pre
 
             refreshQrBtn.addEventListener("click", refreshQr);
 
-            // ENVIAR MENSAJES (Sin cambios)
+            // ENVIAR MENSAJE
             sendBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 const number = phoneNumberInput.value;
@@ -363,7 +485,157 @@ Aquí aparecerán las respuestas del servidor...</pre
                 }
             });
 
-            // DETENER SESIÓN (Sin cambios)
+            // ENVIAR IMAGEN
+            sendImageBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                const number = imagePhoneNumberInput.value;
+                const caption = imageCaptionInput.value;
+                const file = imageFileInput.files[0];
+
+                if (!number || !file) {
+                    alert("El número y el archivo de imagen son requeridos.");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("number", number);
+                formData.append("caption", caption);
+                formData.append("image", file);
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/send-image`,
+                        {
+                            method: "POST",
+                            body: formData,
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+                    alert(
+                        data.success
+                            ? "Imagen enviada!"
+                            : `Error: ${data.message}`
+                    );
+                } catch (error) {
+                    logResponse({ error: error.message });
+                    alert("Error de conexión al enviar la imagen.");
+                }
+            });
+
+            // ENVIAR DOCUMENTO
+            sendDocumentBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                const number = documentPhoneNumberInput.value;
+                const file = documentFileInput.files[0];
+
+                if (!number || !file) {
+                    alert(
+                        "El número y el archivo del documento son requeridos."
+                    );
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("number", number);
+                formData.append("document", file);
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/send-document`,
+                        {
+                            method: "POST",
+                            body: formData,
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+                    alert(
+                        data.success
+                            ? "Documento enviado!"
+                            : `Error: ${data.message}`
+                    );
+                } catch (error) {
+                    logResponse({ error: error.message });
+                    alert("Error de conexión al enviar el documento.");
+                }
+            });
+
+            // ENVIAR AUDIO
+            sendAudioBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                const number = audioPhoneNumberInput.value;
+                const file = audioFileInput.files[0];
+
+                if (!number || !file) {
+                    alert("El número y el archivo de audio son requeridos.");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("number", number);
+                formData.append("audio", file);
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/send-audio`,
+                        {
+                            method: "POST",
+                            body: formData,
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+                    alert(
+                        data.success
+                            ? "Audio enviado!"
+                            : `Error: ${data.message}`
+                    );
+                } catch (error) {
+                    logResponse({ error: error.message });
+                    alert("Error de conexión al enviar el audio.");
+                }
+            });
+
+            // ENVIAR VIDEO
+            sendVideoBtn.addEventListener("click", async () => {
+                const sessionId = sessionIdInput.value;
+                const number = videoPhoneNumberInput.value;
+                const caption = videoCaptionInput.value;
+                const file = videoFileInput.files[0];
+
+                if (!number || !file) {
+                    alert("El número y el archivo de video son requeridos.");
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append("number", number);
+                formData.append("caption", caption);
+                formData.append("video", file);
+
+                try {
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/sessions/${sessionId}/send-video`,
+                        {
+                            method: "POST",
+                            body: formData,
+                        }
+                    );
+                    const data = await response.json();
+                    logResponse(data);
+                    alert(
+                        data.success
+                            ? "Video enviado!"
+                            : `Error: ${data.message}`
+                    );
+                } catch (error) {
+                    logResponse({ error: error.message });
+                    alert("Error de conexión al enviar el video.");
+                }
+            });
+
+            // DETENER SESIÓN
             stopBtn.addEventListener("click", async () => {
                 const sessionId = sessionIdInput.value;
                 if (
