@@ -298,6 +298,66 @@ router.post(
 
 /**
  * @swagger
+ * /api/sessions/{sessionId}/send-button-message:
+ *   post:
+ *     summary: Envía un mensaje con botones de respuesta rápida
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - text
+ *               - buttons
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de teléfono del destinatario (ej: 573001234567)."
+ *               text:
+ *                 type: string
+ *                 description: "El mensaje de texto principal."
+ *               footer:
+ *                 type: string
+ *                 description: "Texto opcional de pie de página."
+ *               buttons:
+ *                 type: array
+ *                 description: "Un array de 1 a 3 botones."
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       description: "ID único para el botón."
+ *                     text:
+ *                       type: string
+ *                       description: "Texto que se muestra en el botón."
+ *                 example:
+ *                   - id: "btn_1"
+ *                     text: "Opción 1"
+ *                   - id: "btn_2"
+ *                     text: "Opción 2"
+ *     responses:
+ *       '200':
+ *         description: Mensaje enviado exitosamente.
+ *       '400':
+ *         description: Faltan parámetros requeridos.
+ *       '404':
+ *         description: Sesión no encontrada.
+ */
+router.post("/:sessionId/send-button-message", SessionController.sendButtonMessage);
+
+/**
+ * @swagger
  * /api/sessions/{sessionId}/end:
  *   delete:
  *     summary: Cierra una sesión y elimina sus datos
@@ -352,5 +412,49 @@ router.delete("/:sessionId/end", SessionController.end);
  *         description: Session not found.
  */
 router.get("/:sessionId/qr", SessionController.getQrCode);
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/metadata:
+ *   put:
+ *     summary: Actualiza la configuración (webhook, api oficial) de una sesión activa
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               webhook:
+ *                 type: string
+ *                 description: "Nueva URL del webhook (opcional)."
+ *                 example: "https://new-webhook.site/..."
+ *               metaConfig:
+ *                 type: object
+ *                 description: "Nueva configuración de Meta API (opcional)."
+ *                 properties:
+ *                   phoneId:
+ *                     type: string
+ *                   token:
+ *                     type: string
+ *                   apiVersion:
+ *                     type: string
+ *     responses:
+ *       '200':
+ *         description: Configuración actualizada correctamente.
+ *       '400':
+ *         description: No se enviaron datos para actualizar.
+ *       '404':
+ *         description: Sesión no encontrada o inactiva.
+ */
+router.put("/:sessionId/metadata", SessionController.updateMetadata);
 
 export default router;

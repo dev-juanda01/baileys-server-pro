@@ -15,20 +15,25 @@ import { Boom } from "@hapi/boom";
 import logger from "../utils/logger.js";
 import SessionManager from "./SessionManager.js";
 import { sendEmailAlert } from "../utils/notification.js";
+import OfficialWhatsappService from "./OfficialWhatsappService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Represents a WhatsApp session, manages connection, authentication, message queue, and webhook integration.
+ * @class WhatsappSession
+ * @description Represents an individual WhatsApp session. It manages the connection, authentication,
+ * outgoing and incoming message queues (webhooks), and reconnection logic.
+ * It can operate in a hybrid mode, utilizing `OfficialWhatsappService` for certain features.
  */
 class WhatsappSession {
     /**
-     * Create a new WhatsappSession instance.
-     * @param {string} sessionId - Unique session identifier.
-     * @param {string|null} [webhookUrl=null] - Optional webhook URL for incoming messages.
+     * Creates a new WhatsappSession instance.
+     * @param {string} sessionId - A unique identifier for the session.
+     * @param {string|null} [webhookUrl=null] - An optional webhook URL to notify of incoming messages.
+     * @param {object|null} [metaConfig=null] - Optional configuration for the Meta Cloud API { phoneId, token, apiVersion }.
      */
-    constructor(sessionId, webhookUrl = null) {
+    constructor(sessionId, webhookUrl = null, metaConfig = null) {
         this.sessionId = sessionId;
         this.sock = null;
         this.status = "starting";
@@ -45,17 +50,41 @@ class WhatsappSession {
         this.maxRetry = 5;
         this.webhookUrl = webhookUrl;
 
+        // Colas de procesamiento
         this.messageQueue = [];
         this.isProcessingQueue = false;
-
         this.webhookQueue = [];
         this.isProcessingWebhookQueue = false;
         this.maxWebhookRetries = 3;
+
+        // Configuración e Instancia de la API Oficial (Híbrido)
+        this.metaConfig = metaConfig;
+        this.officialService = null;
+
+        if (
+            this.metaConfig &&
+            this.metaConfig.phoneId &&
+            this.metaConfig.token
+        ) {
+            try {
+                this.officialService = new OfficialWhatsappService(
+                    this.metaConfig
+                );
+                // Usamos un log de consola simple aquí para no saturar el logger principal si no es crítico
+                // o puedes usar this.logger.info
+            } catch (error) {
+                logger.error(
+                    { error },
+                    `[${this.sessionId}] Error al instanciar OfficialWhatsappService`
+                );
+            }
+        }
     }
 
     /**
      * Initializes the WhatsApp socket connection and authentication state.
-     * @returns {Promise<void>}
+     * It sets up event handlers for the connection, messages, and credentials.
+     * @returns {Promise<void>} A promise that resolves when initialization is complete.
      */
     async init() {
         try {
@@ -80,6 +109,12 @@ class WhatsappSession {
             );
 
             this.sock.ev.on("creds.update", saveCreds);
+
+            if (this.officialService) {
+                logger.info(
+                    `[${this.sessionId}] Servicio Oficial de Meta activo.`
+                );
+            }
         } catch (error) {
             logger.error(
                 { error },
@@ -90,9 +125,11 @@ class WhatsappSession {
     }
 
     /**
-     * Handles incoming WhatsApp messages, downloads media, and queues them for webhook processing.
-     * @param {object} m - Baileys message upsert event object.
-     * @returns {Promise<void>}
+     * Handles incoming WhatsApp messages.
+     * It filters out messages from the user themselves and messages without content,
+     * then queues them to be processed and sent to the webhook.
+     * @param {object} m - The 'messages.upsert' event object from Baileys.
+     * @returns {Promise<void>} A promise that resolves once the message is queued.
      */
     async handleMessages(m) {
         if (!this.webhookUrl) return;
@@ -107,6 +144,7 @@ class WhatsappSession {
             `[${this.sessionId}] Mensaje recibido de ${msg.key.remoteJid}, encolando para procesamiento.`
         );
 
+        // Solo encolamos el mensaje crudo. El procesamiento pesado (descarga) ocurre en la cola.
         const job = {
             rawMessage: msg,
             retryCount: 0,
@@ -117,8 +155,10 @@ class WhatsappSession {
     }
 
     /**
-     * Handles connection updates, manages QR code, reconnection logic, and session cleanup.
-     * @param {object} update - Baileys connection update event object.
+     * Handles connection status updates.
+     * Manages QR code generation, reconnection logic in case of disconnection,
+     * and session cleanup in case of a permanent logout.
+     * @param {object} update - The 'connection.update' event object from Baileys.
      */
     handleConnectionUpdate(update) {
         const { connection, lastDisconnect, qr } = update;
@@ -157,7 +197,51 @@ class WhatsappSession {
     }
 
     /**
-     * Starts the reconnection process with exponential backoff and jitter.
+     * Updates the session's configuration in memory.
+     * Allows for dynamic changes to the webhook URL and Meta API configuration.
+     * @param {string} [newWebhookUrl] - The new URL for the webhook.
+     * @param {object} [newMetaConfig] - The new configuration for the Meta API.
+     */
+    updateConfig(newWebhookUrl, newMetaConfig) {
+        if (newWebhookUrl !== undefined) {
+            this.webhookUrl = newWebhookUrl;
+            this.logger.info(
+                `[${this.sessionId}] Webhook actualizado en memoria.`
+            );
+        }
+
+        if (newMetaConfig !== undefined) {
+            this.metaConfig = newMetaConfig;
+
+            // Si hay nueva configuración de Meta, reinicializamos el servicio
+            if (
+                this.metaConfig &&
+                this.metaConfig.phoneId &&
+                this.metaConfig.token
+            ) {
+                try {
+                    // Asumiendo que importaste OfficialWhatsappService al inicio del archivo
+                    // Si no, asegúrate de tener: import OfficialWhatsappService from "./OfficialWhatsappService.js";
+                    this.officialService = new OfficialWhatsappService(
+                        this.metaConfig
+                    );
+                    this.logger.info(
+                        `[${this.sessionId}] Servicio Oficial de Meta actualizado y reinicializado.`
+                    );
+                } catch (error) {
+                    this.logger.error(
+                        `[${this.sessionId}] Error al actualizar servicio Meta: ${error.message}`
+                    );
+                }
+            } else {
+                this.officialService = null; // Si mandan null, desactivamos el servicio
+            }
+        }
+    }
+
+    /**
+     * Starts the reconnection process using an exponential backoff and jitter strategy.
+     * It aborts if the maximum number of retries is reached.
      */
     startReconnecting() {
         this.retryCount++;
@@ -185,10 +269,10 @@ class WhatsappSession {
     }
 
     /**
-     * Sends a WhatsApp text message. If not connected, queues the message.
+     * Sends a text message. If the session is not connected, it queues the message.
      * @param {string} number - Recipient's phone number (with country code).
      * @param {string} message - Text message to send.
-     * @returns {Promise<object>} Result object indicating success or queue status.
+     * @returns {Promise<object>} An object indicating success or queued status.
      */
     async sendMessage(number, message) {
         logger.info(
@@ -217,10 +301,11 @@ class WhatsappSession {
     }
 
     /**
-     * Sends an image message.
+     * Sends a message with an image.
      * @param {string} recipient - Recipient's JID or phone number.
      * @param {string} filePath - The local path to the image file.
-     * @param {string} [caption=""] - Optional caption.
+     * @param {string} [caption=""] - Optional caption for the image.
+     * @returns {Promise<object>} The result of the Baileys message sending.
      */
     async sendImage(recipient, filePath, caption = "") {
         logger.info(
@@ -245,11 +330,12 @@ class WhatsappSession {
     }
 
     /**
-     * Sends a document message.
+     * Sends a message with a document.
      * @param {string} recipient - Recipient's JID or phone number.
      * @param {string} filePath - The local path to the document file.
      * @param {string} [fileName='document'] - Optional file name.
      * @param {string} [mimetype='application/octet-stream'] - Optional MIME type.
+     * @returns {Promise<object>} The result of the Baileys message sending.
      */
     async sendDocument(
         recipient,
@@ -284,6 +370,7 @@ class WhatsappSession {
      * @param {string} recipient - Recipient's JID or phone number.
      * @param {string} filePath - The local path to the audio file.
      * @param {string} [mimetype='audio/mpeg'] - Optional MIME type.
+     * @returns {Promise<object>} The result of the Baileys message sending.
      */
     async sendAudio(recipient, filePath, mimetype = "audio/mpeg") {
         logger.info(
@@ -310,6 +397,7 @@ class WhatsappSession {
      * @param {string} recipient - Recipient's JID or phone number.
      * @param {string} filePath - The local path to the video file.
      * @param {string} [caption=""] - Optional caption.
+     * @returns {Promise<object>} The result of the Baileys message sending.
      */
     async sendVideo(recipient, filePath, caption = "") {
         logger.info(
@@ -332,11 +420,39 @@ class WhatsappSession {
     }
 
     /**
-     * Actually sends a WhatsApp text message using the socket.
+     * Sends buttons using the Official Meta API.
+     * This delegates the task to `OfficialWhatsappService` and requires the session
+     * to have been initialized with `metaConfig`.
+     * @param {string} recipient - The recipient's number.
+     * @param {string} text - The main text of the message.
+     * @param {string} footer - The footer text.
+     * @param {Array<object>} buttons - An array of button objects [{id, text}].
+     * @returns {Promise<object>} The result from the Meta API.
+     */
+    async sendButtonMessage(recipient, text, footer, buttons) {
+        if (!this.officialService) {
+            throw new Error(
+                "Esta sesión no tiene inicializado el servicio de Meta API Oficial. Verifique que se haya enviado la configuración (metaConfig) al iniciar la sesión."
+            );
+        }
+
+        logger.info(
+            `[${this.sessionId}] Delegando envío de botones a OfficialWhatsappService.`
+        );
+
+        return await this.officialService.sendInteractiveButtons(
+            recipient,
+            { text, footer },
+            buttons
+        );
+    }
+
+    /**
+     * Performs the actual sending of a text message using the Baileys socket.
      * @param {string} number - Recipient's phone number or JID.
      * @param {string} message - Text message to send.
-     * @returns {Promise<object>} Baileys sendMessage result.
      * @private
+     * @returns {Promise<object>} Baileys sendMessage result.
      */
     async _performSendMessage(number, message) {
         const jid = number.includes("@") ? number : `${number}@s.whatsapp.net`;
@@ -344,8 +460,10 @@ class WhatsappSession {
     }
 
     /**
-     * Processes the message queue, sending messages in order when connected.
-     * @returns {Promise<void>}
+     * Processes the outgoing message queue.
+     * It sends messages in FIFO (First-In, First-Out) order when the connection is open.
+     * @returns {Promise<void>} A promise that resolves when the queue processing is complete
+     * or has been paused.
      */
     async processMessageQueue() {
         if (this.isProcessingQueue || this.messageQueue.length === 0) {
@@ -383,8 +501,12 @@ class WhatsappSession {
     }
 
     /**
-     * Processes the webhook queue, sending payloads in order to the webhook URL.
-     * @returns {Promise<void>}
+     * Processes the webhook queue for incoming messages.
+     * It builds a standardized payload, downloads media files if necessary,
+     * and sends the payload to the configured webhook URL.
+     * Implements a retry logic for failures and email alerts for critical failures.
+     * @returns {Promise<void>} A promise that resolves when the queue processing is complete
+     * or has been paused.
      */
     async processWebhookQueue() {
         if (this.isProcessingWebhookQueue || this.webhookQueue.length === 0) {
@@ -554,8 +676,9 @@ class WhatsappSession {
     }
 
     /**
-     * Cleans up session files and removes the session from SessionManager.
-     * @returns {Promise<void>}
+     * Cleans up the session's authentication files from the disk.
+     * This method is called when the session is permanently closed (logout).
+     * @returns {Promise<void>} A promise that resolves when cleanup is done.
      */
     async cleanup() {
         this.status = "close";
@@ -574,8 +697,8 @@ class WhatsappSession {
     }
 
     /**
-     * Logs out from WhatsApp and closes the socket.
-     * @returns {Promise<void>}
+     * Logs out of the WhatsApp session and closes the socket.
+     * @returns {Promise<void>} A promise that resolves upon logout.
      */
     async logout() {
         if (this.sock) {
