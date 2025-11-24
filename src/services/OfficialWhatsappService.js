@@ -2,17 +2,17 @@ import logger from "../utils/logger.js";
 
 /**
  * @class OfficialWhatsappService
- * @description Un servicio para interactuar con la API Oficial de WhatsApp Business Cloud.
- * Cada instancia está vinculada a un conjunto específico de credenciales (phoneId, token).
+ * @description A service for interacting with the Official WhatsApp Business Cloud API.
+ * Each instance is tied to a specific set of credentials (phoneId, token).
  */
 class OfficialWhatsappService {
     /**
-     * Crea una instancia del servicio oficial vinculada a una cuenta específica de Meta.
-     * @param {object} metaConfig - Objeto de configuración para la API de Meta.
-     * @param {string} metaConfig.phoneId - El ID del número de teléfono de Meta.
-     * @param {string} metaConfig.token - El token de acceso de Meta.
-     * @param {string} [metaConfig.apiVersion='v18.0'] - La versión de la Graph API a utilizar.
-     * @throws {Error} Si la configuración de metaConfig está incompleta (falta phoneId o token).
+     * Creates an instance of the official service linked to a specific Meta account.
+     * @param {object} metaConfig - Configuration object for the Meta API.
+     * @param {string} metaConfig.phoneId - The Meta phone number ID.
+     * @param {string} metaConfig.token - The Meta access token.
+     * @param {string} [metaConfig.apiVersion='v18.0'] - The Graph API version to use.
+     * @throws {Error} If the metaConfig is incomplete (missing phoneId or token).
      */
     constructor(metaConfig) {
         if (!metaConfig || !metaConfig.phoneId || !metaConfig.token) {
@@ -28,16 +28,16 @@ class OfficialWhatsappService {
     }
 
     /**
-     * Envía un mensaje interactivo con botones de respuesta usando la API Oficial.
-     * @param {string} recipient - El número de teléfono del destinatario.
-     * @param {object} body - El cuerpo del mensaje.
-     * @param {string} body.text - El texto principal del mensaje.
-     * @param {string} [body.footer] - Texto opcional para el pie de página.
-     * @param {Array<object>} buttons - Un array de objetos de botón.
-     * @param {string} buttons[].id - El ID único para el botón.
-     * @param {string} buttons[].text - El texto a mostrar en el botón.
-     * @returns {Promise<object>} Una promesa que se resuelve con los datos de respuesta de la API de Meta.
-     * @throws {Error} Lanza un error si la llamada a la API falla.
+     * Sends an interactive message with reply buttons using the Official API.
+     * @param {string} recipient - The recipient's phone number.
+     * @param {object} body - The message body.
+     * @param {string} body.text - The main text of the message.
+     * @param {string} [body.footer] - Optional footer text.
+     * @param {Array<object>} buttons - An array of button objects.
+     * @param {string} buttons[].id - The unique ID for the button.
+     * @param {string} buttons[].text - The text to display on the button.
+     * @returns {Promise<object>} A promise that resolves with the response data from the Meta API.
+     * @throws {Error} Throws an error if the API call fails.
      */
     async sendInteractiveButtons(recipient, body, buttons) {
         // Limpieza del número
@@ -96,6 +96,87 @@ class OfficialWhatsappService {
             return data;
         } catch (error) {
             logger.error({ error }, "Fallo al enviar mensaje oficial");
+            throw error;
+        }
+    }
+
+    /**
+     * Sends an interactive list message using the Official API.
+     * @param {string} recipient - The recipient's phone number.
+     * @param {object} body - The main body of the list message.
+     * @param {string} body.text - The primary text content of the message.
+     * @param {string} body.buttonText - The text displayed on the button that opens the list.
+     * @param {string} [body.title] - An optional title for the list's header.
+     * @param {string} [body.footer] - Optional footer text for the message.
+     * @param {Array<object>} sections - An array of section objects. Each section must have a title
+     * and an array of rows. Each row must have an id, title, and optional description.
+     * @example sections: [{ title: "Section 1", rows: [{ id: "row1", title: "Row 1 Title", description: "Row 1 Desc" }] }]
+     * @returns {Promise<object>} A promise that resolves with the response data from the Meta API.
+     * @throws {Error} Throws an error if the API call fails or if required parameters are missing.
+     */
+    async sendInteractiveList(recipient, body, sections) {
+        const cleanNumber = recipient.replace(/\D/g, "");
+
+        // Validación básica de Meta
+        if (!body.buttonText) {
+            throw new Error(
+                "El 'buttonText' (texto del botón que abre la lista) es obligatorio."
+            );
+        }
+
+        const payload = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: cleanNumber,
+            type: "interactive",
+            interactive: {
+                type: "list",
+                header: {
+                    type: "text",
+                    text: body.title || "", // Título opcional en cabecera
+                },
+                body: {
+                    text: body.text,
+                },
+                ...(body.footer && { footer: { text: body.footer } }),
+                action: {
+                    button: body.buttonText, // El texto del botón que despliega la lista
+                    sections: sections, // [{ title: "...", rows: [{id, title, description}] }]
+                },
+            },
+        };
+
+        try {
+            const url = `${this.baseUrl}/${this.phoneId}/messages`;
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error(
+                    { error: data },
+                    "Error en respuesta de Meta API (Lista)"
+                );
+                throw new Error(
+                    data.error?.message ||
+                        "Error desconocido de Meta API al enviar lista"
+                );
+            }
+
+            logger.info(
+                `Mensaje de lista oficial enviado a ${cleanNumber}. ID: ${data.messages[0].id}`
+            );
+            return data;
+        } catch (error) {
+            logger.error({ error }, "Fallo al enviar lista oficial");
             throw error;
         }
     }

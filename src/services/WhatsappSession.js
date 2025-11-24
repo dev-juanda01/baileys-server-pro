@@ -447,6 +447,31 @@ class WhatsappSession {
         );
     }
 
+    async sendOfficialList(
+        recipient,
+        title,
+        text,
+        footer,
+        buttonText,
+        sections
+    ) {
+        if (!this.officialService) {
+            throw new Error(
+                "Esta sesión no tiene inicializado el servicio de Meta API Oficial. Configure 'metaConfig' al iniciar la sesión."
+            );
+        }
+
+        logger.info(
+            `[${this.sessionId}] Delegando envío de lista a OfficialWhatsappService.`
+        );
+
+        return await this.officialService.sendInteractiveList(
+            recipient,
+            { title, text, footer, buttonText },
+            sections
+        );
+    }
+
     /**
      * Performs the actual sending of a text message using the Baileys socket.
      * @param {string} number - Recipient's phone number or JID.

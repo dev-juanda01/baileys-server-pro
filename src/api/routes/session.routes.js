@@ -358,6 +358,82 @@ router.post("/:sessionId/send-button-message", SessionController.sendButtonMessa
 
 /**
  * @swagger
+ * /api/sessions/{sessionId}/send-list-message:
+ *   post:
+ *     summary: Envía un menú de lista interactiva (Solo API Oficial Meta)
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El ID de la sesión.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - text
+ *               - buttonText
+ *               - sections
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de destino."
+ *               title:
+ *                 type: string
+ *                 description: "Título de cabecera (negrita)."
+ *               text:
+ *                 type: string
+ *                 description: "Texto del cuerpo del mensaje."
+ *               footer:
+ *                 type: string
+ *                 description: "Texto pequeño al pie."
+ *               buttonText:
+ *                 type: string
+ *                 description: "Texto del botón que el usuario pulsa para ver la lista."
+ *                 example: "Ver Menú"
+ *               sections:
+ *                 type: array
+ *                 description: "Secciones de la lista."
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     title:
+ *                       type: string
+ *                       description: "Título de la sección."
+ *                     rows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           title:
+ *                             type: string
+ *                           description:
+ *                             type: string
+ *                 example:
+ *                   - title: "Sección 1"
+ *                     rows:
+ *                       - id: "opcion_1"
+ *                         title: "Opción A"
+ *                         description: "Descripción A"
+ *                       - id: "opcion_2"
+ *                         title: "Opción B"
+ *                         description: "Descripción B"
+ *     responses:
+ *       '200':
+ *         description: Lista enviada exitosamente.
+ */
+router.post("/:sessionId/send-list-message", SessionController.sendListMessage);
+
+/**
+ * @swagger
  * /api/sessions/{sessionId}/end:
  *   delete:
  *     summary: Cierra una sesión y elimina sus datos
