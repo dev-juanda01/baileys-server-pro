@@ -1,6 +1,24 @@
+import fs from "fs/promises";
+import path from "path";
 import logger from "../../../shared/logger.js";
 import { normalizeMetaMessage } from "../../../shared/mappers/MessageMapper.js";
 import { sendEmailAlert } from "../../../shared/notification.js";
+
+// Mapa simple para asegurar extensiones correctas
+const MIME_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "video/mp4": ".mp4",
+    "audio/mpeg": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/aac": ".aac",
+    "audio/opus": ".opus",
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        ".docx",
+};
 
 class MetaProvider {
     constructor(sessionId, webhookUrl, metaConfig) {
@@ -14,39 +32,23 @@ class MetaProvider {
             this.config.apiVersion || "v18.0"
         }`;
 
-        // --- SISTEMA DE COLAS ---
         this.webhookQueue = [];
         this.isProcessingWebhookQueue = false;
         this.maxWebhookRetries = 3;
     }
 
     async init() {
-        logger.info(
-            `[${this.sessionId}] [Meta] Provider inicializado con sistema de colas.`
-        );
+        logger.info(`[${this.sessionId}] [Meta] Provider inicializado.`);
     }
 
-    /**
-     * Recibe el mensaje crudo de Meta desde el controlador y lo encola.
-     */
+    // --- RECEPCIÓN DE MENSAJES (WEBHOOK) ---
     async onMessageReceived(metaMsg) {
         if (!this.webhookUrl) return;
-
         logger.info(`[${this.sessionId}] [Meta] Mensaje recibido, encolando.`);
-
-        const job = {
-            rawMessage: metaMsg,
-            retryCount: 0,
-        };
-
-        this.webhookQueue.push(job);
+        this.webhookQueue.push({ rawMessage: metaMsg, retryCount: 0 });
         this.processWebhookQueue();
     }
 
-    /**
-     * Procesa la cola de mensajes de Meta uno por uno.
-     * Normaliza -> Descarga Media -> Envía al Webhook del Usuario.
-     */
     async processWebhookQueue() {
         if (this.isProcessingWebhookQueue || this.webhookQueue.length === 0)
             return;
@@ -57,26 +59,21 @@ class MetaProvider {
             const metaMsg = job.rawMessage;
 
             try {
-                // 1. Normalizar Mensaje
                 const baileysFormatMsg = normalizeMetaMessage(metaMsg);
                 const extractedData =
                     this._extractMessageData(baileysFormatMsg);
 
-                // 2. Descargar Media si existe (Lógica de reintento implícita en la cola)
+                // Descarga de archivos entrantes
                 if (extractedData.media) {
                     const mediaId = extractedData.media;
                     const base64Media = await this.downloadMedia(mediaId);
-
-                    if (base64Media) {
-                        extractedData.media = base64Media;
-                    } else {
+                    if (base64Media) extractedData.media = base64Media;
+                    else
                         throw new Error(
                             `Fallo descarga media Meta ID: ${mediaId}`
                         );
-                    }
                 }
 
-                // 3. Construir Payload final
                 const payload = {
                     sessionId: this.sessionId,
                     timestamp: new Date().toISOString(),
@@ -89,7 +86,6 @@ class MetaProvider {
                     },
                 };
 
-                // 4. Enviar al Webhook del Usuario
                 const response = await fetch(this.webhookUrl, {
                     method: "POST",
                     body: JSON.stringify(payload),
@@ -97,11 +93,9 @@ class MetaProvider {
                 });
 
                 if (!response.ok) {
-                    // Si el error es 5xx, lanzamos error para reintentar.
-                    // Si es 4xx, es permanente, no lanzamos error para descartarlo (pero logueamos).
                     if (response.status >= 400 && response.status < 500) {
                         logger.error(
-                            `[${this.sessionId}] Webhook usuario respondió ${response.status}. Descartando.`
+                            `[${this.sessionId}] Webhook usuario 4xx. Descartando.`
                         );
                     } else {
                         throw new Error(
@@ -110,15 +104,14 @@ class MetaProvider {
                     }
                 } else {
                     logger.info(
-                        `[${this.sessionId}] [Meta] Webhook enviado exitosamente.`
+                        `[${this.sessionId}] [Meta] Webhook enviado OK.`
                     );
                 }
             } catch (error) {
                 job.retryCount++;
-
                 if (job.retryCount >= this.maxWebhookRetries) {
                     logger.error(
-                        `[${this.sessionId}] [Meta] Fallo final tras ${job.retryCount} intentos. Mensaje descartado. Error: ${error.message}`
+                        `[${this.sessionId}] Fallo final webhook. Error: ${error.message}`
                     );
                     sendEmailAlert(
                         `Fallo Webhook Meta ${this.sessionId}`,
@@ -126,57 +119,44 @@ class MetaProvider {
                     );
                 } else {
                     logger.warn(
-                        `[${this.sessionId}] [Meta] Error procesando/enviando (${job.retryCount}/${this.maxWebhookRetries}). Re-encolando en 5s. Error: ${error.message}`
+                        `[${this.sessionId}] Reintentando webhook (${job.retryCount})...`
                     );
-                    this.webhookQueue.unshift(job); // Devolver a la cola
-
-                    // Pausa antes de reintentar para no saturar
+                    this.webhookQueue.unshift(job);
                     setTimeout(() => {
                         this.isProcessingWebhookQueue = false;
                         this.processWebhookQueue();
                     }, 5000);
-                    return; // Salimos del bucle actual
+                    return;
                 }
             }
         }
-
         this.isProcessingWebhookQueue = false;
     }
 
-    /**
-     * Descarga un archivo multimedia de Meta.
-     * Nota: Ya no necesita su propio bucle de reintentos porque el processWebhookQueue maneja el reintento global.
-     */
     async downloadMedia(mediaId) {
         try {
             const urlInfo = `${this.baseUrl}/${mediaId}`;
-            const responseInfo = await fetch(urlInfo, {
+            const r1 = await fetch(urlInfo, {
                 headers: { Authorization: `Bearer ${this.config.token}` },
             });
+            if (!r1.ok) throw new Error("Error obteniendo URL media");
+            const d1 = await r1.json();
 
-            if (!responseInfo.ok)
-                throw new Error("Error obteniendo URL de media");
-            const dataInfo = await responseInfo.json();
-
-            const responseMedia = await fetch(dataInfo.url, {
+            const r2 = await fetch(d1.url, {
                 headers: { Authorization: `Bearer ${this.config.token}` },
             });
+            if (!r2.ok) throw new Error("Error descargando binario");
 
-            if (!responseMedia.ok) throw new Error("Error descargando binario");
-
-            const buffer = await responseMedia.arrayBuffer();
+            const buffer = await r2.arrayBuffer();
             return Buffer.from(buffer).toString("base64");
-        } catch (error) {
-            // Lanzamos el error para que la cola lo capture y reintente
-            throw error;
+        } catch (e) {
+            throw e;
         }
     }
 
-    // --- HELPER DE EXTRACCIÓN (Movido desde el controller) ---
     _extractMessageData(normalizedMsg) {
         const msg = normalizedMsg.message;
         const typeKey = Object.keys(msg)[0];
-
         let data = {
             type: typeKey,
             text: null,
@@ -219,39 +199,140 @@ class MetaProvider {
             data.payload =
                 msg.listResponseMessage.singleSelectReply.selectedRowId;
         }
-
         return data;
     }
 
-    // --- MÉTODOS DE ENVÍO (Sin cambios) ---
+    // ----------------------------------------------------------------------
+    // LÓGICA DE SUBIDA (CORREGIDA)
+    // ----------------------------------------------------------------------
+
+    /**
+     * Sube un archivo local a Meta para obtener su ID.
+     */
+    async uploadMedia(filePath, mimetype, filename) {
+        try {
+            // 1. Leer archivo del disco (filePath viene de Multer: uploads/hash...)
+            const fileBuffer = await fs.readFile(filePath);
+
+            // 2. Determinar MimeType Final
+            // Si Multer nos dio 'image/jpeg', confiamos en él. Si no, usamos Magic Bytes.
+            let finalMime = mimetype;
+            if (!finalMime || finalMime === "application/octet-stream") {
+                finalMime = this._detectMimeTypeFromBuffer(fileBuffer);
+            }
+            // Si aún falla, fallback genérico
+            if (!finalMime) finalMime = "application/octet-stream";
+
+            // 3. CORRECCIÓN CRÍTICA: Nombre del archivo
+            // Meta exige que el nombre en el FormData tenga la extensión correcta.
+            // Si filename es 'WhatsApp Image...', nos aseguramos que termine en .jpg
+            let finalFilename = filename || "file";
+            const correctExt = MIME_EXTENSIONS[finalMime];
+
+            // Si el nombre no tiene la extensión correcta, se la pegamos.
+            if (
+                correctExt &&
+                !finalFilename.toLowerCase().endsWith(correctExt)
+            ) {
+                finalFilename = `${finalFilename}${correctExt}`;
+            }
+
+            logger.info(
+                `[MetaUpload] Subiendo: ${finalFilename} (${finalMime})`
+            );
+
+            // 4. Construir FormData
+            const formData = new FormData();
+            formData.append("messaging_product", "whatsapp");
+
+            // Importante: type en el Blob Y filename en el append
+            const blob = new Blob([fileBuffer], { type: finalMime });
+            formData.append("file", blob, finalFilename);
+
+            const url = `${this.baseUrl}/${this.config.phoneId}/media`;
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${this.config.token}` },
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error(
+                    { metaError: data },
+                    `[${this.sessionId}] Error respuesta Meta upload`
+                );
+                throw new Error(
+                    data.error?.message || "Error subiendo archivo a Meta"
+                );
+            }
+
+            return data.id;
+        } catch (error) {
+            logger.error({ error }, `[${this.sessionId}] Error en uploadMedia`);
+            throw error;
+        }
+    }
+
+    // Helper de respaldo (Magic Bytes)
+    _detectMimeTypeFromBuffer(buffer) {
+        const header = buffer.subarray(0, 4).toString("hex").toUpperCase();
+        if (header.startsWith("FFD8FF")) return "image/jpeg";
+        if (header.startsWith("89504E47")) return "image/png";
+        if (header.startsWith("47494638")) return "image/gif";
+        if (header.startsWith("52494646") && header.endsWith("57454250"))
+            return "image/webp";
+        if (header.startsWith("25504446")) return "application/pdf";
+        if (header.startsWith("66747970")) return "video/mp4";
+        if (header.startsWith("494433") || header.startsWith("FFF3"))
+            return "audio/mpeg";
+        if (header.startsWith("4F676753")) return "audio/ogg";
+        return null;
+    }
+
+    // --- MÉTODOS DE ENVÍO PÚBLICOS ---
+
     async sendMessage(number, message) {
         return this._sendPayload(number, {
             type: "text",
             text: { body: message },
         });
     }
-    async sendImage(number, filePath, caption) {
+
+    async sendImage(number, filePath, caption, mimetype, filename) {
+        // Pasamos mimetype y filename recibidos de Multer a uploadMedia
+        const mediaId = await this.uploadMedia(filePath, mimetype, filename);
         return this._sendPayload(number, {
             type: "image",
-            image: { link: filePath, caption: caption },
+            image: { id: mediaId, caption: caption },
         });
     }
-    async sendDocument(number, filePath, fileName) {
-        return this._sendPayload(number, {
-            type: "document",
-            document: { link: filePath, filename: fileName },
-        });
-    }
-    async sendAudio(number, filePath) {
-        return this._sendPayload(number, {
-            type: "audio",
-            audio: { link: filePath },
-        });
-    }
-    async sendVideo(number, filePath, caption) {
+
+    async sendVideo(number, filePath, caption, mimetype, filename) {
+        console.log(number, filePath, caption, mimetype, filename);
+
+        const mediaId = await this.uploadMedia(filePath, mimetype, filename);
         return this._sendPayload(number, {
             type: "video",
-            video: { link: filePath, caption: caption },
+            video: { id: mediaId, caption: caption },
+        });
+    }
+
+    async sendAudio(number, filePath, mimetype, filename) {
+        const mediaId = await this.uploadMedia(filePath, mimetype, filename);
+        return this._sendPayload(number, {
+            type: "audio",
+            audio: { id: mediaId },
+        });
+    }
+
+    async sendDocument(number, filePath, filename, mimetype) {
+        const mediaId = await this.uploadMedia(filePath, mimetype, filename);
+        return this._sendPayload(number, {
+            type: "document",
+            document: { id: mediaId, filename: filename },
         });
     }
 
@@ -287,12 +368,14 @@ class MetaProvider {
     async _sendPayload(recipient, body) {
         const cleanNumber = recipient.replace(/\D/g, "");
         const url = `${this.baseUrl}/${this.config.phoneId}/messages`;
+
         const payload = {
             messaging_product: "whatsapp",
             recipient_type: "individual",
             to: cleanNumber,
             ...body,
         };
+
         const response = await fetch(url, {
             method: "POST",
             headers: {
@@ -301,6 +384,7 @@ class MetaProvider {
             },
             body: JSON.stringify(payload),
         });
+
         const data = await response.json();
         if (!response.ok)
             throw new Error(data.error?.message || "Error Meta API");
