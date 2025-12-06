@@ -4,38 +4,48 @@ import logger from "../../../shared/logger.js";
 
 class SessionController {
     /**
-     * Iniciar nueva sesión
+     * @summary Starts a new WhatsApp session.
+     * @description Creates and starts a new session, either with Baileys or Meta Provider.
+     * @param {object} req - El objeto de solicitud de Express.
+     * @param {object} req.body - El cuerpo de la solicitud.
+     * @param {string} req.body.sessionId - El identificador único para la sesión.
+     * @param {string} [req.body.webhook] - La URL del webhook para recibir eventos.
+     * @param {object} [req.body.metaConfig] - Specific configuration for Meta Provider.
+     * @param {object} res - El objeto de respuesta de Express.
      */
     async start(req, res) {
         const { sessionId, webhook, metaConfig } = req.body;
         if (!sessionId) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    message: "El campo sessionId es requerido.",
-                });
+            return res.status(400).json({
+                success: false,
+                message: "The sessionId field is required.",
+            });
         }
 
         try {
             await SessionService.startSession(sessionId, webhook, metaConfig);
             res.status(200).json({
                 success: true,
-                message: "La sesión está iniciando.",
+                message: "The session is starting.",
                 sessionId: sessionId,
             });
         } catch (error) {
             logger.error({ error }, `Error al iniciar la sesión ${sessionId}`);
             res.status(500).json({
                 success: false,
-                message: "Error al iniciar la sesión.",
+                message: "Error starting the session.",
                 error: error.message,
             });
         }
     }
 
     /**
-     * Obtener estado de la sesión
+     * @summary Gets the status of a specific session.
+     * @description Returns the current status of the session, such as 'starting', 'open', 'closed', and the QR code if available.
+     * @param {object} req - El objeto de solicitud de Express.
+     * @param {object} req.params - Los parámetros de la ruta.
+     * @param {string} req.params.sessionId - The ID of the session to query.
+     * @param {object} res - El objeto de respuesta de Express.
      */
     async getStatus(req, res) {
         const { sessionId } = req.params;
@@ -44,7 +54,7 @@ class SessionController {
         if (!session) {
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
         }
 
         res.status(200).json({
@@ -56,7 +66,12 @@ class SessionController {
     }
 
     /**
-     * Obtener QR (con soporte para reinicio de Baileys)
+     * @summary Gets the QR code for a session.
+     * @description Provides the QR code in base64 format for scanning.
+     * Includes logic to automatically restart a failed Baileys session.
+     * @param {object} req - El objeto de solicitud de Express.
+     * @param {string} req.params.sessionId - El ID de la sesión.
+     * @param {object} res - El objeto de respuesta de Express.
      */
     async getQrCode(req, res) {
         const { sessionId } = req.params;
@@ -65,25 +80,25 @@ class SessionController {
         if (!session) {
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
         }
 
-        // Meta Provider no usa QR
+        // Meta Provider does not use QR
         if (!session.qr && session.constructor.name === "MetaProvider") {
             return res.status(200).json({
                 success: true,
                 qr: null,
-                message: "Sesión de Meta API (No requiere QR).",
+                message: "Meta API session (No QR required).",
             });
         }
 
-        // Reinicio automático si Baileys murió
+        // Automatic restart if Baileys died
         if (
             session.status === "max_retries_reached" &&
             typeof session.init === "function"
         ) {
             logger.info(
-                `[${sessionId}] Reiniciando sesión fallida desde QR request.`
+                `[${sessionId}] Restarting failed session from QR request.`
             );
             session.retryCount = 0;
             session.status = "starting";
@@ -93,7 +108,7 @@ class SessionController {
                 res.status(200).json({
                     success: true,
                     qr: session.qr,
-                    message: "Proceso reiniciado. Nuevo QR generado.",
+                    message: "Process restarted. New QR generated.",
                 });
             }, 2000);
         }
@@ -102,7 +117,7 @@ class SessionController {
             return res.status(200).json({
                 success: true,
                 qr: null,
-                message: "La sesión ya está conectada.",
+                message: "The session is already connected.",
             });
         }
 
@@ -110,8 +125,7 @@ class SessionController {
             return res.status(200).json({
                 success: true,
                 qr: null,
-                message:
-                    "El código QR no está disponible o está siendo generado.",
+                message: "The QR code is not available or is being generated.",
             });
         }
 
@@ -122,7 +136,13 @@ class SessionController {
     }
 
     /**
-     * Actualizar Metadata (Webhook/Config)
+     * @summary Updates the configuration of an existing session.
+     * @description Allows changing the webhook or the provider's configuration (metaConfig) for a session.
+     * @param {object} req - El objeto de solicitud de Express.
+     * @param {string} req.params.sessionId - El ID de la sesión a actualizar.
+     * @param {string} [req.body.webhook] - La nueva URL del webhook.
+     * @param {object} [req.body.metaConfig] - The new configuration for Meta Provider.
+     * @param {object} res - El objeto de respuesta de Express.
      */
     async updateMetadata(req, res) {
         const { sessionId } = req.params;
@@ -131,7 +151,7 @@ class SessionController {
         if (webhook === undefined && metaConfig === undefined) {
             return res.status(400).json({
                 success: false,
-                message: "Nada que actualizar (envíe webhook o metaConfig).",
+                message: "Nothing to update (send webhook or metaConfig).",
             });
         }
 
@@ -144,7 +164,7 @@ class SessionController {
 
             res.status(200).json({
                 success: true,
-                message: "Configuración actualizada correctamente.",
+                message: "Configuration updated successfully.",
                 data: result,
             });
         } catch (error) {
@@ -160,7 +180,13 @@ class SessionController {
     }
 
     /**
-     * Enviar Mensaje de Texto
+     * @summary Sends a text message to a number.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The ID of the session from which the message will be sent.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's phone number (with country code).
+     * @param {string} req.body.message - The content of the text message.
+     * @param {object} res - The Express response object.
      */
     async sendMessage(req, res) {
         const { sessionId } = req.params;
@@ -169,20 +195,20 @@ class SessionController {
         if (!number || !message) {
             return res
                 .status(400)
-                .json({ success: false, message: "Faltan datos requeridos." });
+                .json({ success: false, message: "Required data is missing." });
         }
 
         const session = SessionService.getSession(sessionId);
         if (!session)
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
 
         try {
             const result = await session.sendMessage(number, message);
             res.status(200).json({ success: true, result });
         } catch (error) {
-            logger.error({ error }, `Error enviando mensaje ${sessionId}`);
+            logger.error({ error }, `Error sending message ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         }
     }
@@ -192,7 +218,15 @@ class SessionController {
     // --------------------------------------------------------------------------------
 
     /**
-     * Enviar Imagen
+     * @summary Sends an image to a number.
+     * @description Sends an image file with an optional caption.
+     * @param {object} req - The Express request object, including the uploaded file.
+     * @param {string} req.params.sessionId - The session ID.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's number.
+     * @param {string} [req.body.caption] - The caption for the image.
+     * @param {object} req.file - The image file uploaded by multer.
+     * @param {object} res - The Express response object.
      */
     async sendImage(req, res) {
         const { sessionId } = req.params;
@@ -203,7 +237,7 @@ class SessionController {
             if (file) await fs.unlink(file.path).catch(() => {});
             return res.status(400).json({
                 success: false,
-                message: "Faltan datos (number, image).",
+                message: "Missing data (number, image).",
             });
         }
 
@@ -212,7 +246,7 @@ class SessionController {
             await fs.unlink(file.path).catch(() => {});
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
         }
 
         try {
@@ -221,11 +255,11 @@ class SessionController {
                 file.path,
                 caption,
                 file.mimetype, // IMPORTANTE: Meta necesita esto
-                file.originalname // IMPORTANTE: Meta necesita esto
+                file.originalname // IMPORTANT: Meta needs this
             );
             res.status(200).json({ success: true, result });
         } catch (error) {
-            logger.error({ error }, `Error enviando imagen ${sessionId}`);
+            logger.error({ error }, `Error sending image ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         } finally {
             await fs.unlink(file.path).catch(() => {});
@@ -233,7 +267,15 @@ class SessionController {
     }
 
     /**
-     * Enviar Video (CORREGIDO: Pasando los 5 parámetros)
+     * @summary Sends a video to a number.
+     * @description Sends a video file with an optional caption.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The session ID.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's number.
+     * @param {string} [req.body.caption] - The caption for the video.
+     * @param {object} req.file - The video file uploaded by multer.
+     * @param {object} res - The Express response object.
      */
     async sendVideo(req, res) {
         const { sessionId } = req.params;
@@ -244,7 +286,7 @@ class SessionController {
             if (file) await fs.unlink(file.path).catch(() => {});
             return res.status(400).json({
                 success: false,
-                message: "Faltan datos (number, video).",
+                message: "Missing data (number, video).",
             });
         }
 
@@ -253,11 +295,11 @@ class SessionController {
             await fs.unlink(file.path).catch(() => {});
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
         }
 
         try {
-            // CORRECCIÓN: Se pasan mimetype y filename al provider
+            // CORRECTION: mimetype and filename are passed to the provider
             const result = await session.sendVideo(
                 number,
                 file.path,
@@ -267,7 +309,7 @@ class SessionController {
             );
             res.status(200).json({ success: true, result });
         } catch (error) {
-            logger.error({ error }, `Error enviando video ${sessionId}`);
+            logger.error({ error }, `Error sending video ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         } finally {
             await fs.unlink(file.path).catch(() => {});
@@ -275,7 +317,14 @@ class SessionController {
     }
 
     /**
-     * Enviar Audio
+     * @summary Sends an audio file as a voice message.
+     * @description Sends an audio file. The WhatsApp client usually displays it as a voice message.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The session ID.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's number.
+     * @param {object} req.file - The audio file uploaded by multer.
+     * @param {object} res - The Express response object.
      */
     async sendAudio(req, res) {
         const { sessionId } = req.params;
@@ -286,7 +335,7 @@ class SessionController {
             if (file) await fs.unlink(file.path).catch(() => {});
             return res.status(400).json({
                 success: false,
-                message: "Faltan datos (number, audio).",
+                message: "Missing data (number, audio).",
             });
         }
 
@@ -295,7 +344,7 @@ class SessionController {
             await fs.unlink(file.path).catch(() => {});
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
         }
 
         try {
@@ -307,7 +356,7 @@ class SessionController {
             );
             res.status(200).json({ success: true, result });
         } catch (error) {
-            logger.error({ error }, `Error enviando audio ${sessionId}`);
+            logger.error({ error }, `Error sending audio ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         } finally {
             await fs.unlink(file.path).catch(() => {});
@@ -315,7 +364,14 @@ class SessionController {
     }
 
     /**
-     * Enviar Documento
+     * @summary Sends a document to a number.
+     * @description Sends any type of file as a document attachment.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The session ID.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's number.
+     * @param {object} req.file - The document file uploaded by multer.
+     * @param {object} res - The Express response object.
      */
     async sendDocument(req, res) {
         const { sessionId } = req.params;
@@ -326,7 +382,7 @@ class SessionController {
             if (file) await fs.unlink(file.path).catch(() => {});
             return res.status(400).json({
                 success: false,
-                message: "Faltan datos (number, document).",
+                message: "Missing data (number, document).",
             });
         }
 
@@ -335,12 +391,12 @@ class SessionController {
             await fs.unlink(file.path).catch(() => {});
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
         }
 
         try {
-            // Nota: MetaProvider espera (number, path, filename, mimetype)
-            // Asegúrate que el orden coincida con la definición en el Provider
+            // Note: MetaProvider expects (number, path, filename, mimetype)
+            // Make sure the order matches the definition in the Provider
             const result = await session.sendDocument(
                 number,
                 file.path,
@@ -349,7 +405,7 @@ class SessionController {
             );
             res.status(200).json({ success: true, result });
         } catch (error) {
-            logger.error({ error }, `Error enviando documento ${sessionId}`);
+            logger.error({ error }, `Error sending document ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         } finally {
             await fs.unlink(file.path).catch(() => {});
@@ -357,7 +413,17 @@ class SessionController {
     }
 
     /**
-     * Enviar Botones
+     * @summary Sends a message with interactive buttons.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The session ID.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's number.
+     * @param {string} req.body.text - The main text of the message.
+     * @param {string} [req.body.footer] - An optional footer text.
+     * @param {Array<object>} req.body.buttons - An array of button objects.
+     * @param {string} req.body.buttons[].id - The button ID.
+     * @param {string} req.body.buttons[].text - The text to display on the button.
+     * @param {object} res - The Express response object.
      */
     async sendButtonMessage(req, res) {
         const { sessionId } = req.params;
@@ -372,14 +438,14 @@ class SessionController {
         ) {
             return res
                 .status(400)
-                .json({ success: false, message: "Datos incompletos." });
+                .json({ success: false, message: "Incomplete data." });
         }
 
         const session = SessionService.getSession(sessionId);
         if (!session)
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
 
         try {
             const result = await session.sendButtonMessage(
@@ -390,24 +456,35 @@ class SessionController {
             );
             res.status(200).json({
                 success: true,
-                message: "Mensaje con botones enviado.",
+                message: "Button message sent.",
                 details: result,
             });
         } catch (error) {
             logger.error(
                 { error },
-                `Error al enviar mensaje con botones desde ${sessionId}`
+                `Error sending button message from ${sessionId}`
             );
             res.status(500).json({
                 success: false,
-                message: "Error al enviar el mensaje con botones.",
+                message: "Error sending the button message.",
                 error: error.message,
             });
         }
     }
 
     /**
-     * Enviar Lista
+     * @summary Sends a message with a list of options.
+     * @description This method is only compatible with the Meta API provider.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The session ID.
+     * @param {object} req.body - The request body.
+     * @param {string} req.body.number - The recipient's number.
+     * @param {string} req.body.title - The message title.
+     * @param {string} req.body.text - The body of the list message.
+     * @param {string} [req.body.footer] - Optional footer text.
+     * @param {string} req.body.buttonText - The text of the button that opens the list.
+     * @param {Array<object>} req.body.sections - The sections and rows of the list.
+     * @param {object} res - The Express response object.
      */
     async sendListMessage(req, res) {
         const { sessionId } = req.params;
@@ -416,21 +493,21 @@ class SessionController {
         if (!number || !text || !buttonText || !sections) {
             return res
                 .status(400)
-                .json({ success: false, message: "Datos incompletos." });
+                .json({ success: false, message: "Incomplete data." });
         }
 
         const session = SessionService.getSession(sessionId);
         if (!session)
             return res
                 .status(404)
-                .json({ success: false, message: "Sesión no encontrada." });
+                .json({ success: false, message: "Session not found." });
 
         try {
             if (!session.sendListMessage) {
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Este proveedor (Baileys) no soporta listas. Configure Meta API.",
+                        "This provider (Baileys) does not support lists. Configure Meta API.",
                 });
             }
             const result = await session.sendListMessage(
@@ -443,13 +520,17 @@ class SessionController {
             );
             res.status(200).json({ success: true, result });
         } catch (error) {
-            logger.error({ error }, `Error enviando lista ${sessionId}`);
+            logger.error({ error }, `Error sending list ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         }
     }
 
     /**
-     * Cerrar Sesión
+     * @summary Closes and deletes a session.
+     * @description Closes the WhatsApp connection and removes the session data from the system.
+     * @param {object} req - The Express request object.
+     * @param {string} req.params.sessionId - The ID of the session to close.
+     * @param {object} res - The Express response object.
      */
     async end(req, res) {
         const { sessionId } = req.params;
@@ -458,12 +539,12 @@ class SessionController {
             if (result)
                 res.status(200).json({
                     success: true,
-                    message: "Sesión cerrada exitosamente.",
+                    message: "Session closed successfully.",
                 });
             else
                 res.status(404).json({
                     success: false,
-                    message: "Sesión no encontrada.",
+                    message: "Session not found.",
                 });
         } catch (error) {
             res.status(500).json({ success: false, error: error.message });
