@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import path from "path";
+import morgan from "morgan";
 import { fileURLToPath } from "url";
 
 import swaggerSpec from "./src/infrastructure/config/swagger.js";
@@ -22,6 +23,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+app.use(morgan("dev"));
 
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/meta", metaRoutes);

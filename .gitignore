@@ -3,3 +3,8 @@ sessions
 
 mock.json
 .env
+
+yarn.lock
+package-lock.json
+
+.idea/workspace.xml
