@@ -208,6 +208,8 @@ class SessionController {
             const result = await session.sendMessage(number, message);
             res.status(200).json({ success: true, result });
         } catch (error) {
+            console.log(error);
+            
             logger.error({ error }, `Error sending message ${sessionId}`);
             res.status(500).json({ success: false, error: error.message });
         }

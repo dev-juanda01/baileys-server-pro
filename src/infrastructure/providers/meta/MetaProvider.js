@@ -1,10 +1,9 @@
 import fs from "fs/promises";
-import path from "path";
+import axios from "axios";
 import logger from "../../../shared/logger.js";
 import { normalizeMetaMessage } from "../../../shared/mappers/MessageMapper.js";
 import { sendEmailAlert } from "../../../shared/notification.js";
 
-// Mapa simple para asegurar extensiones correctas
 const MIME_EXTENSIONS = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -60,10 +59,8 @@ class MetaProvider {
 
             try {
                 const baileysFormatMsg = normalizeMetaMessage(metaMsg);
-                const extractedData =
-                    this._extractMessageData(baileysFormatMsg);
+                const extractedData = this._extractMessageData(baileysFormatMsg);
 
-                // Descarga de archivos entrantes
                 if (extractedData.media) {
                     const mediaId = extractedData.media;
                     const base64Media = await this.downloadMedia(mediaId);
@@ -86,28 +83,17 @@ class MetaProvider {
                     },
                 };
 
-                const response = await fetch(this.webhookUrl, {
-                    method: "POST",
-                    body: JSON.stringify(payload),
-                    headers: { "Content-Type": "application/json" },
-                });
-
-                if (!response.ok) {
-                    if (response.status >= 400 && response.status < 500) {
-                        logger.error(
-                            `[${this.sessionId}] Webhook usuario 4xx. Descartando.`
-                        );
-                    } else {
-                        throw new Error(
-                            `Webhook usuario respondió ${response.status}`
-                        );
-                    }
-                } else {
-                    logger.info(
-                        `[${this.sessionId}] [Meta] Webhook enviado OK.`
-                    );
-                }
+                await axios.post(this.webhookUrl, payload);
+                logger.info(`[${this.sessionId}] [Meta] Webhook enviado OK.`);
             } catch (error) {
+                const status = error.response?.status;
+                if (status >= 400 && status < 500) {
+                    logger.error(
+                        `[${this.sessionId}] Webhook usuario 4xx. Descartando.`
+                    );
+                    continue;
+                }
+
                 job.retryCount++;
                 if (job.retryCount >= this.maxWebhookRetries) {
                     logger.error(
@@ -134,24 +120,14 @@ class MetaProvider {
     }
 
     async downloadMedia(mediaId) {
-        try {
-            const urlInfo = `${this.baseUrl}/${mediaId}`;
-            const r1 = await fetch(urlInfo, {
-                headers: { Authorization: `Bearer ${this.config.token}` },
-            });
-            if (!r1.ok) throw new Error("Error obteniendo URL media");
-            const d1 = await r1.json();
-
-            const r2 = await fetch(d1.url, {
-                headers: { Authorization: `Bearer ${this.config.token}` },
-            });
-            if (!r2.ok) throw new Error("Error descargando binario");
-
-            const buffer = await r2.arrayBuffer();
-            return Buffer.from(buffer).toString("base64");
-        } catch (e) {
-            throw e;
-        }
+        const r1 = await axios.get(`${this.baseUrl}/${mediaId}`, {
+            headers: { Authorization: `Bearer ${this.config.token}` },
+        });
+        const r2 = await axios.get(r1.data.url, {
+            headers: { Authorization: `Bearer ${this.config.token}` },
+            responseType: "arraybuffer",
+        });
+        return Buffer.from(r2.data).toString("base64");
     }
 
     _extractMessageData(normalizedMsg) {
@@ -202,81 +178,45 @@ class MetaProvider {
         return data;
     }
 
-    // ----------------------------------------------------------------------
-    // LÓGICA DE SUBIDA (CORREGIDA)
-    // ----------------------------------------------------------------------
-
-    /**
-     * Sube un archivo local a Meta para obtener su ID.
-     */
     async uploadMedia(filePath, mimetype, filename) {
         try {
-            // 1. Leer archivo del disco (filePath viene de Multer: uploads/hash...)
             const fileBuffer = await fs.readFile(filePath);
 
-            // 2. Determinar MimeType Final
-            // Si Multer nos dio 'image/jpeg', confiamos en él. Si no, usamos Magic Bytes.
             let finalMime = mimetype;
             if (!finalMime || finalMime === "application/octet-stream") {
                 finalMime = this._detectMimeTypeFromBuffer(fileBuffer);
             }
-            // Si aún falla, fallback genérico
             if (!finalMime) finalMime = "application/octet-stream";
 
-            // 3. CORRECCIÓN CRÍTICA: Nombre del archivo
-            // Meta exige que el nombre en el FormData tenga la extensión correcta.
-            // Si filename es 'WhatsApp Image...', nos aseguramos que termine en .jpg
             let finalFilename = filename || "file";
             const correctExt = MIME_EXTENSIONS[finalMime];
-
-            // Si el nombre no tiene la extensión correcta, se la pegamos.
-            if (
-                correctExt &&
-                !finalFilename.toLowerCase().endsWith(correctExt)
-            ) {
+            if (correctExt && !finalFilename.toLowerCase().endsWith(correctExt)) {
                 finalFilename = `${finalFilename}${correctExt}`;
             }
 
-            logger.info(
-                `[MetaUpload] Subiendo: ${finalFilename} (${finalMime})`
-            );
+            logger.info(`[MetaUpload] Subiendo: ${finalFilename} (${finalMime})`);
 
-            // 4. Construir FormData
             const formData = new FormData();
             formData.append("messaging_product", "whatsapp");
-
-            // Importante: type en el Blob Y filename en el append
             const blob = new Blob([fileBuffer], { type: finalMime });
             formData.append("file", blob, finalFilename);
 
             const url = `${this.baseUrl}/${this.config.phoneId}/media`;
 
-            const response = await fetch(url, {
-                method: "POST",
+            const response = await axios.post(url, formData, {
                 headers: { Authorization: `Bearer ${this.config.token}` },
-                body: formData,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                logger.error(
-                    { metaError: data },
-                    `[${this.sessionId}] Error respuesta Meta upload`
-                );
-                throw new Error(
-                    data.error?.message || "Error subiendo archivo a Meta"
-                );
-            }
-
-            return data.id;
+            return response.data.id;
         } catch (error) {
-            logger.error({ error }, `[${this.sessionId}] Error en uploadMedia`);
+            console.error("META ERROR [uploadMedia]:");
+            console.error(error.response?.data);
+            console.error(error.response?.status);
+            console.error(error.message);
             throw error;
         }
     }
 
-    // Helper de respaldo (Magic Bytes)
     _detectMimeTypeFromBuffer(buffer) {
         const header = buffer.subarray(0, 4).toString("hex").toUpperCase();
         if (header.startsWith("FFD8FF")) return "image/jpeg";
@@ -302,7 +242,6 @@ class MetaProvider {
     }
 
     async sendImage(number, filePath, caption, mimetype, filename) {
-        // Pasamos mimetype y filename recibidos de Multer a uploadMedia
         const mediaId = await this.uploadMedia(filePath, mimetype, filename);
         return this._sendPayload(number, {
             type: "image",
@@ -311,8 +250,6 @@ class MetaProvider {
     }
 
     async sendVideo(number, filePath, caption, mimetype, filename) {
-        console.log(number, filePath, caption, mimetype, filename);
-
         const mediaId = await this.uploadMedia(filePath, mimetype, filename);
         return this._sendPayload(number, {
             type: "video",
@@ -376,19 +313,21 @@ class MetaProvider {
             ...body,
         };
 
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${this.config.token}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-        });
-
-        const data = await response.json();
-        if (!response.ok)
-            throw new Error(data.error?.message || "Error Meta API");
-        return data;
+        try {
+            const response = await axios.post(url, payload, {
+                headers: {
+                    Authorization: `Bearer ${this.config.token}`,
+                    "Content-Type": "application/json",
+                },
+            });
+            return response.data;
+        } catch (error) {
+            console.error("META ERROR [_sendPayload]:");
+            console.error(error.response?.data);
+            console.error(error.response?.status);
+            console.error(error.message);
+            throw error;
+        }
     }
 
     async logout() {
