@@ -22,36 +22,32 @@ class MetaController {
             if (body.object === "whatsapp_business_account") {
                 for (const entry of body.entry) {
                     for (const change of entry.changes) {
+
+                        // Mensajes entrantes de usuarios
                         if (change.value.messages) {
                             const message = change.value.messages[0];
 
-                            // En algunos casos Meta envía contacts junto con messages
-                            // Inyectamos contacts en el message para que el Mapper pueda sacar el nombre
                             if (change.value.contacts) {
                                 message.contacts = change.value.contacts;
                             }
 
-                            const phoneId =
-                                change.value.metadata.phone_number_id;
-
-                            // Buscamos sesión activa
+                            const phoneId = change.value.metadata.phone_number_id;
                             const session = this.findSessionByPhoneId(phoneId);
 
-                            if (session) {
-                                // Delegamos toda la lógica al Provider (que tiene la cola)
-                                // Nota: session puede ser MetaProvider o BaileysProvider
-                                // Ambos deben tener el método 'onMessageReceived' o similar si queremos unificar
+                            if (session && session.constructor.name === "MetaProvider") {
+                                session.onMessageReceived(message);
+                            }
+                        }
 
-                                // Si es MetaProvider (nuestra nueva clase), tiene onMessageReceived.
-                                if (
-                                    session.constructor.name === "MetaProvider"
-                                ) {
-                                    session.onMessageReceived(message);
-                                }
-                                // Si es BaileysProvider (modo híbrido antiguo),
-                                // solo debemos procesar interacciones, y BaileysProvider NO tiene lógica para recibir de Meta.
-                                // En v2.0 estricta, asumimos que si llega de Meta, es una sesión MetaProvider.
-                                // Si quieres mantener el soporte híbrido antiguo, aquí iría la lógica de filtrado.
+                        // Cambios de estado de templates HSM
+                        if (change.field === "message_template_status_update") {
+                            const session = this.findSessionByAccountId(entry.id);
+                            if (session) {
+                                session.onTemplateStatusUpdate(change.value);
+                            } else {
+                                logger.warn(
+                                    `[MetaWebhook] template_status_update sin sesión para accountId: ${entry.id}`
+                                );
                             }
                         }
                     }
@@ -61,6 +57,17 @@ class MetaController {
             logger.error({ error }, "Error Meta Webhook");
         }
     };
+
+    /**
+     * Busca la sesión activa cuyo metaConfig.accountId coincide con el WABA ID del evento.
+     * @param {string} accountId  entry.id del payload de Meta (WABA ID).
+     */
+    findSessionByAccountId(accountId) {
+        for (const session of SessionService.sessions.values()) {
+            if (session.config?.accountId === accountId) return session;
+        }
+        return null;
+    }
 
     findSessionByPhoneId(phoneId) {
         for (const session of SessionService.sessions.values()) {

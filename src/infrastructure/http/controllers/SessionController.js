@@ -534,6 +534,100 @@ class SessionController {
      * @param {string} req.params.sessionId - The ID of the session to close.
      * @param {object} res - The Express response object.
      */
+    /**
+     * @summary Envía el template a Meta Business API para aprobación.
+     * @param {object} req.body.templateData  Datos completos del template desde olimpochat.
+     */
+    async submitTemplate(req, res) {
+        const { sessionId } = req.params;
+        const { templateData } = req.body;
+
+        if (!templateData) {
+            return res.status(400).json({ success: false, message: "templateData es requerido." });
+        }
+
+        const session = SessionService.getSession(sessionId);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        try {
+            const result = await session.submitTemplate(templateData);
+            res.status(200).json({ success: true, data: result });
+        } catch (error) {
+            logger.error({ error }, `Error submitTemplate ${sessionId}`);
+            res.status(error.response?.status || 500).json({
+                success: false,
+                message: error.response?.data?.error?.message || error.message,
+            });
+        }
+    }
+
+    /**
+     * @summary Elimina un template de Meta Business API.
+     * @param {object} req.body.templateName  Nombre del template.
+     * @param {object} req.body.templateId    meta_template_id (hsm_id), opcional.
+     */
+    async deleteTemplate(req, res) {
+        const { sessionId } = req.params;
+        const { templateName, templateId } = req.body;
+
+        if (!templateName) {
+            return res.status(400).json({ success: false, message: "templateName es requerido." });
+        }
+
+        const session = SessionService.getSession(sessionId);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        try {
+            const result = await session.deleteTemplate(templateName, templateId);
+            res.status(200).json({ success: true, data: result });
+        } catch (error) {
+            logger.error({ error }, `Error deleteTemplate ${sessionId}`);
+            res.status(error.response?.status || 500).json({
+                success: false,
+                message: error.response?.data?.error?.message || error.message,
+            });
+        }
+    }
+
+    /**
+     * @summary Envía un mensaje de tipo template aprobado a un número de teléfono.
+     * @param {string} req.body.number        Número destino.
+     * @param {string} req.body.templateName  Nombre del template.
+     * @param {string} req.body.language      Código de idioma (ej. "es").
+     * @param {object} req.body.variables     Mapa posicional { "1": "Juan" }.
+     */
+    async sendTemplate(req, res) {
+        const { sessionId } = req.params;
+        const { number, templateName, language, variables } = req.body;
+
+        if (!number || !templateName || !language) {
+            return res.status(400).json({
+                success: false,
+                message: "number, templateName y language son requeridos.",
+            });
+        }
+
+        const session = SessionService.getSession(sessionId);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        try {
+            const result = await session.sendTemplate(number, templateName, language, variables || {});
+            res.status(200).json({ success: true, result });
+        } catch (error) {
+            logger.error({ error }, `Error sendTemplate ${sessionId}`);
+            res.status(error.response?.status || 500).json({
+                success: false,
+                message: error.response?.data?.error?.message || error.message,
+            });
+        }
+    }
+
     async end(req, res) {
         const { sessionId } = req.params;
         try {

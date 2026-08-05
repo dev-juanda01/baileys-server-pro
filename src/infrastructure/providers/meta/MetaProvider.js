@@ -1,8 +1,10 @@
 import fs from "fs/promises";
 import axios from "axios";
+import { MixinBuilder } from "mixin-support";
 import logger from "../../../shared/logger.js";
 import { normalizeMetaMessage } from "../../../shared/mappers/MessageMapper.js";
 import { sendEmailAlert } from "../../../shared/notification.js";
+import { MetaTemplatesMixin } from "./MetaTemplatesMixin.js";
 
 const MIME_EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -19,10 +21,12 @@ const MIME_EXTENSIONS = {
         ".docx",
 };
 
-class MetaProvider {
+class MetaProvider extends MixinBuilder.with(MetaTemplatesMixin) {
     constructor(sessionId, webhookUrl, metaConfig) {
+        super();
         this.sessionId = sessionId;
         this.webhookUrl = webhookUrl;
+        // config esperado: { phoneId, token, apiVersion?, accountId? }
         this.config = metaConfig;
         this.status = "open";
         this.qr = null;
