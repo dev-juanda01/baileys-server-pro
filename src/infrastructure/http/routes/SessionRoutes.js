@@ -1,6 +1,6 @@
 import multer from "multer";
 import { Router } from "express";
-import SessionController from "../controllers/session.controller.js";
+import SessionController from "../controllers/SessionController.js";
 
 const upload = multer({ dest: "uploads/" });
 const router = Router();
@@ -532,5 +532,232 @@ router.get("/:sessionId/qr", SessionController.getQrCode);
  *         description: Sesión no encontrada o inactiva.
  */
 router.put("/:sessionId/metadata", SessionController.updateMetadata);
+
+// ── TEMPLATES HSM ─────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/templates/submit:
+ *   post:
+ *     summary: Envía un template HSM a Meta para aprobación
+ *     description: >
+ *       Crea el template en Meta Business API y lo pone en estado PENDING.
+ *       Requiere que la sesión sea de tipo Meta Cloud API y que metaConfig incluya accountId (WABA ID).
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: UUID del negocio (sessionId en baileys-server-pro).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - templateData
+ *             properties:
+ *               templateData:
+ *                 type: object
+ *                 description: Datos del template a enviar a Meta.
+ *                 required:
+ *                   - name
+ *                   - category
+ *                   - language
+ *                   - body
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                     description: "Nombre del template (solo letras minúsculas, números y guiones bajos)."
+ *                     example: "bienvenida_cliente"
+ *                   category:
+ *                     type: string
+ *                     enum: [MARKETING, UTILITY, AUTHENTICATION]
+ *                     example: "UTILITY"
+ *                   language:
+ *                     type: string
+ *                     description: "Código de idioma BCP-47."
+ *                     example: "es"
+ *                   header_type:
+ *                     type: string
+ *                     enum: [NONE, TEXT, IMAGE, VIDEO, DOCUMENT]
+ *                     default: "NONE"
+ *                   header_text:
+ *                     type: string
+ *                     description: "Requerido si header_type es TEXT."
+ *                   header_media_url:
+ *                     type: string
+ *                     description: "Requerido si header_type es IMAGE, VIDEO o DOCUMENT."
+ *                   body:
+ *                     type: string
+ *                     description: "Texto del cuerpo. Puede incluir variables {{1}}, {{2}}..."
+ *                     example: "Hola {{1}}, tu pedido {{2}} está listo."
+ *                   footer:
+ *                     type: string
+ *                     description: "Texto de pie de página (no disponible en AUTHENTICATION)."
+ *                   buttons:
+ *                     type: array
+ *                     description: "Máximo 3 botones. No mezclar QUICK_REPLY con URL/PHONE_NUMBER."
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         type:
+ *                           type: string
+ *                           enum: [QUICK_REPLY, URL, PHONE_NUMBER, OTP]
+ *                         text:
+ *                           type: string
+ *                         url:
+ *                           type: string
+ *                         phone_number:
+ *                           type: string
+ *     responses:
+ *       '200':
+ *         description: Template enviado a Meta exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       description: "ID del template asignado por Meta."
+ *                     status:
+ *                       type: string
+ *                       example: "PENDING"
+ *       '400':
+ *         description: Datos incompletos o sesión sin accountId configurado.
+ *       '404':
+ *         description: Sesión no encontrada.
+ *       '500':
+ *         description: Error al comunicarse con Meta Business API.
+ */
+router.post("/:sessionId/templates/submit", SessionController.submitTemplate);
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/templates:
+ *   delete:
+ *     summary: Elimina un template de Meta Business API
+ *     description: >
+ *       Elimina el template por nombre (y opcionalmente por hsm_id).
+ *       Si el template tiene status APPROVED en Meta, Meta también lo eliminará de su plataforma.
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: UUID del negocio.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - templateName
+ *             properties:
+ *               templateName:
+ *                 type: string
+ *                 description: "Nombre exacto del template a eliminar."
+ *                 example: "bienvenida_cliente"
+ *               templateId:
+ *                 type: string
+ *                 description: "meta_template_id (hsm_id). Recomendado para evitar eliminar por nombre ambiguo."
+ *                 example: "123456789"
+ *     responses:
+ *       '200':
+ *         description: Template eliminado de Meta exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *       '400':
+ *         description: templateName no proporcionado.
+ *       '404':
+ *         description: Sesión no encontrada.
+ *       '500':
+ *         description: Error al comunicarse con Meta Business API.
+ */
+router.delete("/:sessionId/templates", SessionController.deleteTemplate);
+
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/send-template:
+ *   post:
+ *     summary: Envía un mensaje de template aprobado a un número de teléfono
+ *     description: >
+ *       Envía un template con status APPROVED a un contacto vía Meta Cloud API.
+ *       Las variables se mapean en orden posicional sobre los marcadores {{1}}, {{2}}... del body.
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: UUID del negocio.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - number
+ *               - templateName
+ *               - language
+ *             properties:
+ *               number:
+ *                 type: string
+ *                 description: "Número de teléfono destino con código de país."
+ *                 example: "573001234567"
+ *               templateName:
+ *                 type: string
+ *                 description: "Nombre del template aprobado."
+ *                 example: "bienvenida_cliente"
+ *               language:
+ *                 type: string
+ *                 description: "Código de idioma del template."
+ *                 example: "es"
+ *               variables:
+ *                 type: object
+ *                 description: "Mapa posicional de variables para los marcadores del body."
+ *                 example: { "1": "Juan", "2": "REF-12345" }
+ *     responses:
+ *       '200':
+ *         description: Template enviado exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 result:
+ *                   type: object
+ *                   description: "Respuesta de Meta con el ID del mensaje enviado."
+ *       '400':
+ *         description: Datos incompletos.
+ *       '404':
+ *         description: Sesión no encontrada.
+ *       '500':
+ *         description: Error al comunicarse con Meta Business API.
+ */
+router.post("/:sessionId/send-template", SessionController.sendTemplate);
 
 export default router;

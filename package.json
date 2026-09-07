@@ -1,7 +1,7 @@
 {
     "name": "baileys-server-pro",
-    "version": "1.0.0",
-    "description": "Servidor multi-sesión de WhatsApp con Baileys y ESM",
+    "version": "2.0.0",
+    "description": "Servidor Multi-Provider (Baileys + Meta) con Arquitectura Hexagonal",
     "main": "server.js",
     "type": "module",
     "scripts": {
@@ -12,16 +12,21 @@
         "whatsapp",
         "baileys",
         "esm",
-        "docker"
+        "docker",
+        "meta",
+        "facebook"
     ],
     "author": "",
     "license": "ISC",
     "dependencies": {
         "@hapi/boom": "10.0.1",
         "@whiskeysockets/baileys": "^6.7.21",
+        "axios": "^1.16.1",
         "cors": "^2.8.5",
         "dotenv": "16.4.5",
         "express": "4.19.2",
+        "mixin-support": "^2.1.0",
+        "morgan": "^1.10.1",
         "multer": "^2.0.2",
         "nodemailer": "^7.0.10",
         "pino": "9.2.0",
