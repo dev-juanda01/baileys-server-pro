@@ -65,8 +65,19 @@ class SessionService {
 
             // Pass a cleanup callback to the provider. This allows the provider
             // to request its own deletion if a non-recoverable error occurs (e.g., logout).
+            //
+            // IMPORTANT: Baileys' sock.logout() resolves before the "connection.update"
+            // (loggedOut) event actually fires. When updateSession() switches a session
+            // from Baileys -> Meta, it calls logout() and immediately starts the new
+            // MetaProvider, which overwrites this sessionId in `this.sessions`. If the
+            // stale loggedOut event arrives afterwards and this callback blindly deletes
+            // by sessionId, it wipes out the brand-new Meta session instead of the old
+            // Baileys one. Guard by identity: only clean up if THIS exact provider
+            // instance is still the one registered for the sessionId.
             const onCleanup = async () => {
-                await this.deleteSession(sessionId);
+                if (this.sessions.get(sessionId) === provider) {
+                    await this.deleteSession(sessionId);
+                }
             };
 
             provider = new BaileysProvider(
