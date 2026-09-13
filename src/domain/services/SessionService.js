@@ -139,6 +139,17 @@ class SessionService {
                 logger.info(
                     `[${sessionId}] Configuración de proveedor cambiada. Reiniciando sesión...`
                 );
+
+                // Detach the cleanup hook BEFORE logging out. Baileys' "loggedOut"
+                // connection.update event can arrive after this function has already
+                // moved on and registered a brand-new provider (e.g. MetaProvider) for
+                // this sessionId. Without detaching, that delayed event would still
+                // fire the old provider's onCleanup, which deletes by sessionId and
+                // wipes out the session we just created. We are intentionally tearing
+                // this provider down as part of a provider switch, so its own cleanup
+                // hook must be a no-op from this point on.
+                activeSession.onCleanup = null;
+
                 await activeSession.logout(); // Stop current
                 this.sessions.delete(sessionId);
 

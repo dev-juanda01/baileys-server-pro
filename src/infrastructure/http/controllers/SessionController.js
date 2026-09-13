@@ -209,9 +209,17 @@ class SessionController {
             res.status(200).json({ success: true, result });
         } catch (error) {
             console.log(error);
-            
+
             logger.error({ error }, `Error sending message ${sessionId}`);
-            res.status(500).json({ success: false, error: error.message });
+            // Forward Meta's raw error payload (e.g. code 131047 "re-engagement
+            // message" when outside the 24h customer service window) so callers
+            // upstream (olimpochat backend) can distinguish this case from a
+            // generic failure and react accordingly (e.g. require a template).
+            res.status(error.response?.status || 500).json({
+                success: false,
+                error: error.message,
+                meta_error: error.response?.data?.error ?? null,
+            });
         }
     }
 
