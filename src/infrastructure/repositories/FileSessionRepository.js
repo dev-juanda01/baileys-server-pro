@@ -108,6 +108,45 @@ class FileSessionRepository {
     }
 
     /**
+     * Renames a session's directory (metadata + auth files) from one sessionId
+     * to another, preserving all of its contents — including Baileys'
+     * multi-file auth state (the actual device pairing keys) and/or the Meta
+     * Cloud API config. Used to migrate an already-authenticated session to a
+     * new sessionId WITHOUT requiring re-authentication (no QR rescan, no
+     * redoing the Meta Embedded Signup).
+     * @param {string} oldSessionId
+     * @param {string} newSessionId
+     * @returns {Promise<boolean>} true if the rename happened, false if there was no session under oldSessionId.
+     * @throws {Error} If a session already exists under newSessionId (refuses to overwrite).
+     */
+    async renameSession(oldSessionId, newSessionId) {
+        const oldDir = path.join(SESSIONS_DIR, oldSessionId);
+        const newDir = path.join(SESSIONS_DIR, newSessionId);
+
+        if (!fs.existsSync(oldDir)) return false;
+        if (fs.existsSync(newDir)) {
+            throw new Error(`Ya existe una sesión guardada con el id "${newSessionId}".`);
+        }
+
+        await fs.promises.rename(oldDir, newDir);
+
+        // Keep metadata.json's own sessionId field in sync so restoreSessions()
+        // uses the new id on the next server restart.
+        const metadataPath = path.join(newDir, "metadata.json");
+        if (fs.existsSync(metadataPath)) {
+            try {
+                const data = JSON.parse(fs.readFileSync(metadataPath, "utf-8"));
+                data.sessionId = newSessionId;
+                fs.writeFileSync(metadataPath, JSON.stringify(data, null, 2));
+            } catch (e) {
+                logger.error(`Error actualizando metadata.json tras renombrar sesión: ${e.message}`);
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Gets the absolute path to a session's directory.
      * @param {string} sessionId - The ID of the session.
      * @returns {string} The full path to the session directory.

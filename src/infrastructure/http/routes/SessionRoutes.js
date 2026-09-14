@@ -533,6 +533,49 @@ router.get("/:sessionId/qr", SessionController.getQrCode);
  */
 router.put("/:sessionId/metadata", SessionController.updateMetadata);
 
+/**
+ * @swagger
+ * /api/sessions/{sessionId}/migrate:
+ *   post:
+ *     summary: Migra una sesión ya autenticada a un nuevo sessionId
+ *     description: >
+ *       Renombra la carpeta de la sesión (archivos de auth de Baileys y/o
+ *       configuración de Meta) y actualiza la clave en memoria, SIN invalidar
+ *       el vínculo del dispositivo de WhatsApp Business App ni las
+ *       credenciales de Meta — no requiere volver a escanear el QR ni rehacer
+ *       el Embedded Signup.
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: El sessionId actual.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newSessionId
+ *             properties:
+ *               newSessionId:
+ *                 type: string
+ *                 description: El sessionId al que se migra.
+ *     responses:
+ *       '200':
+ *         description: Sesión migrada exitosamente.
+ *       '400':
+ *         description: newSessionId no proporcionado.
+ *       '404':
+ *         description: No existe ninguna sesión guardada con el sessionId actual.
+ *       '500':
+ *         description: Ya existe una sesión con el nuevo sessionId, u otro error.
+ */
+router.post("/:sessionId/migrate", SessionController.migrate);
+
 // ── TEMPLATES HSM ─────────────────────────────────────────────────────────────
 
 /**

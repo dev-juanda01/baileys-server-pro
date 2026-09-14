@@ -654,6 +654,46 @@ class SessionController {
             res.status(500).json({ success: false, error: error.message });
         }
     }
+
+    /**
+     * @summary Migrates an already-authenticated session to a new sessionId.
+     * @description Renames the session's on-disk folder (auth files / Meta
+     * config) and updates the in-memory key, WITHOUT invalidating the WhatsApp
+     * Business App device pairing or the Meta credentials — no QR rescan or
+     * Embedded Signup redo required. Used when the caller changes how it keys
+     * sessions (e.g. from business_uuid to connection_uuid).
+     * @param {object} req
+     * @param {string} req.params.sessionId - The current sessionId.
+     * @param {string} req.body.newSessionId - The sessionId to migrate to.
+     * @param {object} res
+     */
+    async migrate(req, res) {
+        const { sessionId } = req.params;
+        const { newSessionId } = req.body;
+
+        if (!newSessionId) {
+            return res.status(400).json({
+                success: false,
+                message: "newSessionId es requerido.",
+            });
+        }
+
+        try {
+            const result = await SessionService.migrateSessionId(sessionId, newSessionId);
+
+            if (!result.migrated) {
+                return res.status(404).json({
+                    success: false,
+                    message: `No se encontró ninguna sesión guardada con el id "${sessionId}".`,
+                });
+            }
+
+            res.status(200).json({ success: true, ...result });
+        } catch (error) {
+            logger.error({ error }, `Error migrando sesión ${sessionId} -> ${newSessionId}`);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
 }
 
 export default new SessionController();

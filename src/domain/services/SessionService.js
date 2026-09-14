@@ -188,6 +188,46 @@ class SessionService {
     }
 
     /**
+     * Migrates an already-authenticated session to a new sessionId, WITHOUT
+     * invalidating the underlying WhatsApp Business App device pairing or the
+     * Meta Cloud API credentials — renames the on-disk session folder and
+     * updates the in-memory map key. Used to move sessions that were created
+     * under an old sessionId scheme (e.g. business_uuid) to a new one (e.g.
+     * connection_uuid) without requiring the client to rescan a QR code or
+     * redo the Meta Embedded Signup.
+     *
+     * @async
+     * @param {string} oldSessionId
+     * @param {string} newSessionId
+     * @returns {Promise<{migrated: boolean, wasActive: boolean}>}
+     * @throws {Error} If a session already exists (on disk or in memory) under newSessionId.
+     */
+    async migrateSessionId(oldSessionId, newSessionId) {
+        if (oldSessionId === newSessionId) {
+            return { migrated: false, wasActive: this.sessions.has(oldSessionId) };
+        }
+
+        if (this.sessions.has(newSessionId)) {
+            throw new Error(`Ya existe una sesión activa en memoria con el id "${newSessionId}".`);
+        }
+
+        const renamed = await SessionRepository.renameSession(oldSessionId, newSessionId);
+        if (!renamed) {
+            return { migrated: false, wasActive: false };
+        }
+
+        const activeSession = this.sessions.get(oldSessionId);
+        if (activeSession) {
+            activeSession.sessionId = newSessionId;
+            this.sessions.delete(oldSessionId);
+            this.sessions.set(newSessionId, activeSession);
+        }
+
+        logger.info(`Sesión migrada de "${oldSessionId}" a "${newSessionId}".`);
+        return { migrated: true, wasActive: !!activeSession };
+    }
+
+    /**
      * Restores all sessions from the file system.
      * This is typically called on application startup to bring all previously running
      * sessions back online.
