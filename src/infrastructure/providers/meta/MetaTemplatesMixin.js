@@ -252,21 +252,49 @@ const MetaTemplatesMixin = (Base) => class extends Base {
 
     /**
      * Envía un mensaje de tipo template a un número de teléfono.
+     *
+     * IMPORTANTE sobre headers de media: el `example.header_handle` usado al
+     * CREAR el template solo sirve para la revisión de Meta — NO es la imagen
+     * que se envía en cada mensaje real. Si el template tiene un header
+     * IMAGE/VIDEO/DOCUMENT, cada envío debe incluir su propio componente
+     * `header` con la media real (por link o media id); omitirlo hace que
+     * Meta rechace el mensaje con "Parameter format does not match format in
+     * the created template" (#132012), aunque los parámetros del body estén
+     * perfectos.
+     *
      * @param {string} number        Número destino con código de país.
      * @param {string} templateName
      * @param {string} language      Código de idioma (ej. "es").
-     * @param {object} variables     Mapa posicional { "1": "Juan", "2": "REF-123" }.
+     * @param {object} [variables]   Mapa posicional { "1": "Juan", "2": "REF-123" }.
+     * @param {object} [header]      { type: "IMAGE"|"VIDEO"|"DOCUMENT", mediaUrl: string, filename?: string }
      * @returns {Promise<object>}
      */
-    async sendTemplate(number, templateName, language, variables = {}) {
+    async sendTemplate(number, templateName, language, variables = {}, header = null) {
+        const components = [];
+
+        const HEADER_PARAM_TYPE = { IMAGE: "image", VIDEO: "video", DOCUMENT: "document" };
+        const headerParamType = header?.type && HEADER_PARAM_TYPE[header.type];
+
+        if (headerParamType && header.mediaUrl) {
+            const mediaPayload = { link: header.mediaUrl };
+            if (headerParamType === "document" && header.filename) {
+                mediaPayload.filename = header.filename;
+            }
+
+            components.push({
+                type: "header",
+                parameters: [{ type: headerParamType, [headerParamType]: mediaPayload }],
+            });
+        }
+
         const bodyParameters = Object.entries(variables).map(([, value]) => ({
             type: "text",
             text: String(value),
         }));
 
-        const components = bodyParameters.length
-            ? [{ type: "body", parameters: bodyParameters }]
-            : [];
+        if (bodyParameters.length) {
+            components.push({ type: "body", parameters: bodyParameters });
+        }
 
         return this._sendPayload(number, {
             type: "template",

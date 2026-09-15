@@ -805,6 +805,22 @@ router.delete("/:sessionId/templates", SessionController.deleteTemplate);
  *                 type: object
  *                 description: "Mapa posicional de variables para los marcadores del body."
  *                 example: { "1": "Juan", "2": "REF-12345" }
+ *               header:
+ *                 type: object
+ *                 description: >
+ *                   Requerido si el template tiene un header IMAGE/VIDEO/DOCUMENT —
+ *                   la media de ejemplo usada al crear el template NO se reenvía
+ *                   automáticamente en cada mensaje, hay que proveerla en cada envío.
+ *                 properties:
+ *                   type:
+ *                     type: string
+ *                     enum: [IMAGE, VIDEO, DOCUMENT]
+ *                   mediaUrl:
+ *                     type: string
+ *                     description: "URL pública de la media a usar en este envío."
+ *                   filename:
+ *                     type: string
+ *                     description: "Solo para DOCUMENT."
  *     responses:
  *       '200':
  *         description: Template enviado exitosamente.

@@ -677,7 +677,7 @@ class SessionController {
      */
     async sendTemplate(req, res) {
         const { sessionId } = req.params;
-        const { number, templateName, language, variables } = req.body;
+        const { number, templateName, language, variables, header } = req.body;
 
         if (!number || !templateName || !language) {
             return res.status(400).json({
@@ -699,7 +699,7 @@ class SessionController {
         }
 
         try {
-            const result = await session.sendTemplate(number, templateName, language, variables || {});
+            const result = await session.sendTemplate(number, templateName, language, variables || {}, header || null);
             res.status(200).json({ success: true, result });
         } catch (error) {
             logger.error({ error }, `Error sendTemplate ${sessionId}`);
