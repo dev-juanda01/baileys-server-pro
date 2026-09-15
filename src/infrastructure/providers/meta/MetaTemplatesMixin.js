@@ -193,6 +193,35 @@ const MetaTemplatesMixin = (Base) => class extends Base {
     }
 
     /**
+     * Lista los templates registrados en Meta para el WABA de esta sesión —
+     * incluye los que se crearon directamente en Meta Business Manager, no
+     * solo los que pasaron por `submitTemplate`.
+     * @returns {Promise<Array<object>>} Templates crudos (id, name, status, category, language, components, rejected_reason).
+     */
+    async getTemplates() {
+        this._requireAccountId();
+
+        const url = `${this.baseUrl}/${this.config.accountId}/message_templates`;
+
+        try {
+            const response = await axios.get(url, {
+                headers: { Authorization: `Bearer ${this.config.token}` },
+                params: {
+                    fields: "id,name,status,category,language,components,rejected_reason",
+                    limit:  200,
+                },
+            });
+            return response.data?.data || [];
+        } catch (error) {
+            logger.error(
+                { error: error.response?.data || error.message },
+                `[${this.sessionId}] Error al listar templates de Meta.`
+            );
+            throw error;
+        }
+    }
+
+    /**
      * Elimina un template de Meta Business API.
      * @param {string} templateName
      * @param {string} [templateId]  meta_template_id (hsm_id)

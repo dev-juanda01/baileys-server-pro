@@ -543,6 +543,34 @@ class SessionController {
      * @param {object} res - The Express response object.
      */
     /**
+     * @summary Lista los templates registrados en Meta para el WABA de esta sesión.
+     * @description Incluye templates creados directamente en Meta Business Manager,
+     * no solo los enviados a través de submitTemplate.
+     * @param {object} req
+     * @param {string} req.params.sessionId
+     * @param {object} res
+     */
+    async getTemplates(req, res) {
+        const { sessionId } = req.params;
+
+        const session = SessionService.getSession(sessionId);
+        if (!session) {
+            return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        try {
+            const templates = await session.getTemplates();
+            res.status(200).json({ success: true, data: templates });
+        } catch (error) {
+            logger.error({ error }, `Error getTemplates ${sessionId}`);
+            res.status(error.response?.status || 500).json({
+                success: false,
+                message: error.response?.data?.error?.message || error.message,
+            });
+        }
+    }
+
+    /**
      * @summary Envía el template a Meta Business API para aprobación.
      * @param {object} req.body.templateData  Datos completos del template desde olimpochat.
      */

@@ -580,6 +580,30 @@ router.post("/:sessionId/migrate", SessionController.migrate);
 
 /**
  * @swagger
+ * /api/sessions/{sessionId}/templates:
+ *   get:
+ *     summary: Lista los templates registrados en Meta para el WABA de esta sesión
+ *     description: >
+ *       Incluye templates creados directamente en Meta Business Manager, no solo
+ *       los enviados a través de /templates/submit. Requiere que metaConfig
+ *       incluya accountId (WABA ID) y token.
+ *     tags: [Sessions]
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       '200':
+ *         description: Lista de templates obtenida exitosamente.
+ *       '404':
+ *         description: Sesión no encontrada.
+ */
+router.get("/:sessionId/templates", SessionController.getTemplates);
+
+/**
+ * @swagger
  * /api/sessions/{sessionId}/templates/submit:
  *   post:
  *     summary: Envía un template HSM a Meta para aprobación
