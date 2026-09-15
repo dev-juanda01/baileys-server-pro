@@ -558,6 +558,13 @@ class SessionController {
             return res.status(404).json({ success: false, message: "Session not found." });
         }
 
+        if (typeof session.getTemplates !== "function") {
+            return res.status(400).json({
+                success: false,
+                message: `La sesión "${sessionId}" está corriendo como WhatsApp Web (Baileys), no como Meta Cloud API. Los templates HSM solo existen para conexiones Meta Cloud API — configura la sesión Meta primero (metaConfig con accountId/token).`,
+            });
+        }
+
         try {
             const templates = await session.getTemplates();
             res.status(200).json({ success: true, data: templates });
@@ -585,6 +592,13 @@ class SessionController {
         const session = SessionService.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        if (typeof session.submitTemplate !== "function") {
+            return res.status(400).json({
+                success: false,
+                message: `La sesión "${sessionId}" está corriendo como WhatsApp Web (Baileys), no como Meta Cloud API. Los templates HSM solo existen para conexiones Meta Cloud API — configura la sesión Meta primero (metaConfig con accountId/token).`,
+            });
         }
 
         try {
@@ -615,6 +629,13 @@ class SessionController {
         const session = SessionService.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        if (typeof session.deleteTemplate !== "function") {
+            return res.status(400).json({
+                success: false,
+                message: `La sesión "${sessionId}" está corriendo como WhatsApp Web (Baileys), no como Meta Cloud API. Los templates HSM solo existen para conexiones Meta Cloud API — configura la sesión Meta primero (metaConfig con accountId/token).`,
+            });
         }
 
         try {
@@ -650,6 +671,13 @@ class SessionController {
         const session = SessionService.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ success: false, message: "Session not found." });
+        }
+
+        if (typeof session.sendTemplate !== "function") {
+            return res.status(400).json({
+                success: false,
+                message: `La sesión "${sessionId}" está corriendo como WhatsApp Web (Baileys), no como Meta Cloud API. Los templates HSM solo existen para conexiones Meta Cloud API — configura la sesión Meta primero (metaConfig con accountId/token).`,
+            });
         }
 
         try {
