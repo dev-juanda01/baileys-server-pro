@@ -57,11 +57,29 @@ class SessionController {
                 .json({ success: false, message: "Session not found." });
         }
 
+        const isMetaSession = session.constructor.name === "MetaProvider";
+
         res.status(200).json({
             success: true,
             sessionId: session.sessionId,
             status: session.status,
             qr: session.qr,
+            provider: isMetaSession ? "META_CLOUD_API" : "WHATSAPP_WEB",
+            // Surfaces the config actually loaded in memory for this session — not
+            // what's stored in olimpochat's DB — so mismatches (e.g. accountId
+            // pointing at the wrong WABA/Business ID) are visible without digging
+            // through logs. Never includes the access token itself.
+            ...(isMetaSession && session.config
+                ? {
+                      metaConfig: {
+                          phoneId: session.config.phoneId ?? null,
+                          accountId: session.config.accountId ?? null,
+                          appId: session.config.appId ?? null,
+                          apiVersion: session.config.apiVersion ?? null,
+                          hasToken: Boolean(session.config.token),
+                      },
+                  }
+                : {}),
         });
     }
 
