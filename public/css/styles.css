@@ -1,0 +1,1058 @@
+/* =========================================================================
+   Material 3 tokens (hand-authored tonal palette, seed = brand green).
+   Everything below builds on these — surfaces use tonal *containers*
+   instead of "white card + gray page + drop shadow", which is the actual
+   M3 way of expressing elevation for most components. Real box-shadow is
+   reserved for the handful of components M3 keeps it on: FAB, dialog,
+   snackbar.
+   ========================================================================= */
+:root {
+    /* Primary (brand green) */
+    --md-primary: #1c6b30;
+    --md-on-primary: #ffffff;
+    --md-primary-container: #a6f5ad;
+    --md-on-primary-container: #002106;
+
+    /* Secondary (muted green, used for selection/tonal accents) */
+    --md-secondary: #52634c;
+    --md-on-secondary: #ffffff;
+    --md-secondary-container: #d5e8cb;
+    --md-on-secondary-container: #101f0e;
+
+    /* Tertiary (blue — doubles as the Meta Cloud API brand accent) */
+    --md-tertiary: #38658f;
+    --md-on-tertiary: #ffffff;
+    --md-tertiary-container: #d0e4ff;
+    --md-on-tertiary-container: #001d36;
+
+    /* Error */
+    --md-error: #ba1a1a;
+    --md-on-error: #ffffff;
+    --md-error-container: #ffdad6;
+    --md-on-error-container: #410002;
+
+    /* Warning (extended color role — not in the base M3 spec, added the way
+       most production M3 apps add a 4th semantic role) */
+    --md-warning: #8a5300;
+    --md-on-warning: #ffffff;
+    --md-warning-container: #ffddb3;
+    --md-on-warning-container: #2b1700;
+
+    /* Neutral surfaces — the tonal ladder that replaces flat white/gray */
+    --md-background: #f7fbf1;
+    --md-surface: #f7fbf1;
+    --md-surface-container-lowest: #ffffff;
+    --md-surface-container-low: #f1f4ec;
+    --md-surface-container: #ebeee6;
+    --md-surface-container-high: #e5e9e0;
+    --md-surface-container-highest: #dfe4da;
+    --md-on-surface: #1a1c18;
+    --md-on-surface-variant: #43483e;
+    --md-outline: #73796c;
+    --md-outline-variant: #c3c8b9;
+    --md-inverse-surface: #2f312c;
+    --md-inverse-on-surface: #f0f1e8;
+    --md-inverse-primary: #8bd894;
+
+    /* Shape scale */
+    --shape-xs: 4px;
+    --shape-sm: 8px;
+    --shape-md: 12px;
+    --shape-lg: 16px;
+    --shape-xl: 28px;
+    --shape-full: 100px;
+
+    /* The only three elevations actually used as real shadows */
+    --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.13);
+    --elevation-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.13);
+    --elevation-3: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.13);
+
+    --state-hover: 0.08;
+    --state-focus: 0.12;
+    --state-pressed: 0.12;
+
+    --motion-standard: cubic-bezier(0.2, 0, 0, 1);
+
+    font-size: 15px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* Several components below set their own `display` (flex/flex-column) for
+   layout, which — same-origin, same-specificity — overrides the browser's
+   built-in `[hidden] { display: none }` rule by source order. Without this,
+   toggling the `hidden` property from JS has no visual effect. */
+[hidden] {
+    display: none !important;
+}
+
+::selection {
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+}
+
+body {
+    margin: 0;
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Helvetica, Arial, sans-serif;
+    background-color: var(--md-background);
+    color: var(--md-on-surface);
+    -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-size: 20px;
+    line-height: 1;
+    vertical-align: middle;
+    user-select: none;
+}
+
+#app {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--md-outline-variant);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--md-outline);
+}
+
+/* ---------- State layer (M3's hover/focus/press overlay) ---------- */
+
+.state-layer {
+    position: relative;
+    isolation: isolate;
+}
+
+.state-layer::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.15s var(--motion-standard);
+    pointer-events: none;
+}
+
+.state-layer:hover::before {
+    opacity: var(--state-hover);
+}
+
+.state-layer:active::before {
+    opacity: var(--state-pressed);
+}
+
+/* ---------- Sidebar (Material 3 Navigation Drawer) ---------- */
+
+.sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    background-color: var(--md-surface-container-low);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: 22px 20px 16px;
+}
+
+.sidebar-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+.sidebar-header h1 {
+    font-size: 1.375rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--md-on-surface);
+}
+
+.logo-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--shape-md);
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.sidebar-header h1 .logo-dot .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--md-on-surface-variant);
+    flex-shrink: 0;
+    transition: background-color 0.15s var(--motion-standard);
+}
+
+.btn-icon:hover {
+    background: color-mix(in srgb, var(--md-on-surface-variant) 8%, transparent);
+}
+
+.btn-icon:active {
+    background: color-mix(in srgb, var(--md-on-surface-variant) 12%, transparent);
+}
+
+/* ---------- Buttons (Filled / Filled Tonal / Text — all pill-shaped) ---------- */
+
+.btn {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    border: none;
+    border-radius: var(--shape-full);
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: box-shadow 0.15s var(--motion-standard);
+}
+
+.btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 0.15s var(--motion-standard);
+    pointer-events: none;
+}
+
+.btn:hover::before {
+    opacity: var(--state-hover);
+}
+
+.btn:active::before {
+    opacity: var(--state-pressed);
+}
+
+.btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+/* Filled button — the primary, highest-emphasis action */
+.btn-primary {
+    background: var(--md-primary);
+    color: var(--md-on-primary);
+    width: 100%;
+}
+
+/* Filled tonal button — secondary emphasis */
+.btn-secondary {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+}
+
+/* Tonal error button — destructive actions, still not a jarring solid red */
+.btn-danger {
+    background: var(--md-error-container);
+    color: var(--md-on-error-container);
+}
+
+.btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn:disabled::before {
+    display: none;
+}
+
+.btn-sm {
+    padding: 7px 14px;
+    font-size: 0.8125rem;
+}
+
+/* Extended FAB — the one button M3 keeps a real shadow on */
+.fab-extended {
+    box-shadow: var(--elevation-2);
+    border-radius: var(--shape-lg);
+}
+
+.fab-extended:hover {
+    box-shadow: var(--elevation-3);
+}
+
+.sidebar-search {
+    padding: 4px 20px 12px;
+}
+
+.sidebar-search input {
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--shape-sm);
+    font-size: 0.875rem;
+    background: var(--md-surface-container-highest);
+    color: var(--md-on-surface);
+    transition: box-shadow 0.15s var(--motion-standard);
+}
+
+.sidebar-search input::placeholder {
+    color: var(--md-on-surface-variant);
+}
+
+.sidebar-search input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--md-primary);
+}
+
+.instance-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 12px 16px;
+}
+
+.instance-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: var(--shape-full);
+    cursor: pointer;
+    margin-bottom: 3px;
+    color: var(--md-on-surface-variant);
+    transition: background-color 0.15s var(--motion-standard);
+}
+
+.instance-card:hover {
+    background-color: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+}
+
+.instance-card.active {
+    background-color: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+}
+
+.instance-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: #fff;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.instance-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.instance-name {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--md-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.instance-card.active .instance-name {
+    color: var(--md-on-secondary-container);
+}
+
+.instance-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.empty-list {
+    color: var(--md-on-surface-variant);
+    font-size: 0.85rem;
+    padding: 24px 14px;
+    text-align: center;
+    line-height: 1.5;
+}
+
+/* ---------- Status dot / badges (chips) ---------- */
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--md-outline);
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+.status-dot.open {
+    background: var(--md-primary);
+}
+
+.status-dot.connecting,
+.status-dot.starting {
+    background: var(--md-warning);
+}
+
+.status-dot.stopped,
+.status-dot.closed,
+.status-dot.max_retries_reached {
+    background: var(--md-error);
+}
+
+.status-label {
+    font-size: 0.75rem;
+    color: inherit;
+    opacity: 0.85;
+}
+
+/* Assist-chip styling for the provider badge */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 3px 10px;
+    border-radius: var(--shape-full);
+    text-transform: uppercase;
+}
+
+.badge-meta {
+    background: var(--md-tertiary-container);
+    color: var(--md-on-tertiary-container);
+}
+
+.badge-baileys {
+    background: var(--md-surface-container-highest);
+    color: var(--md-on-surface-variant);
+}
+
+/* ---------- Main / detail ---------- */
+
+.main {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--md-surface);
+}
+
+.empty-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--md-on-surface-variant);
+    font-size: 1rem;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    padding: 20px;
+}
+
+.empty-state-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.empty-state-icon .material-symbols-outlined {
+    font-size: 32px;
+}
+
+.instance-detail {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    animation: fade-in 0.2s var(--motion-standard);
+}
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    background: var(--md-surface);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.detail-title {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.detail-title h2 {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 500;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ---------- Tabs (Material 3 Primary Tabs, pill active indicator) ---------- */
+
+.tabs {
+    display: flex;
+    gap: 6px;
+    padding: 0 24px 12px;
+    background: var(--md-surface);
+    overflow-x: auto;
+}
+
+.tab-btn {
+    position: relative;
+    background: none;
+    border: none;
+    border-radius: var(--shape-full);
+    padding: 9px 18px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--md-on-surface-variant);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s var(--motion-standard), color 0.15s var(--motion-standard);
+}
+
+.tab-btn:hover {
+    background: color-mix(in srgb, var(--md-on-surface) 6%, transparent);
+}
+
+.tab-btn.active {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+}
+
+.tab-panel {
+    padding: 20px 28px 60px;
+    max-width: 900px;
+    animation: fade-in 0.18s var(--motion-standard);
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Filled card — tone carries the elevation, not a shadow */
+.card {
+    background: var(--md-surface-container);
+    border: none;
+    border-radius: var(--shape-lg);
+    padding: 22px;
+    margin-bottom: 20px;
+}
+
+.card h3 {
+    margin-top: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-subtitle {
+    color: var(--md-on-surface-variant);
+    font-size: 0.85rem;
+    margin-top: -8px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.qr-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0 4px;
+}
+
+.qr-box {
+    min-height: 256px;
+    min-width: 256px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--shape-md);
+    padding: 12px;
+    text-align: center;
+    color: var(--md-on-surface-variant);
+    font-size: 0.85rem;
+    background: var(--md-surface-container-highest);
+}
+
+.qr-box img,
+.qr-box canvas {
+    border-radius: var(--shape-sm);
+    background: #fff;
+    padding: 8px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.form-group.full {
+    grid-column: 1 / -1;
+}
+
+label {
+    font-weight: 500;
+    font-size: 0.78rem;
+    color: var(--md-on-surface-variant);
+}
+
+.hint {
+    font-size: 0.76rem;
+    color: var(--md-on-surface-variant);
+    line-height: 1.5;
+}
+
+/* Filled text field (M3): tonal background, flat top, bottom indicator line */
+input[type="text"],
+input[type="url"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+    padding: 11px 14px;
+    border: none;
+    border-bottom: 1px solid var(--md-outline);
+    border-radius: var(--shape-xs) var(--shape-xs) 0 0;
+    font-size: 0.875rem;
+    font-family: inherit;
+    width: 100%;
+    background: var(--md-surface-container-highest);
+    color: var(--md-on-surface);
+    transition: border-color 0.15s var(--motion-standard), box-shadow 0.15s var(--motion-standard);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-bottom: 2px solid var(--md-primary);
+    padding-bottom: 10px;
+}
+
+input[type="file"] {
+    font-size: 0.85rem;
+    color: var(--md-on-surface-variant);
+    border-bottom: none;
+    background: transparent;
+    padding-left: 0;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 70px;
+}
+
+.switch-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.dynamic-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    margin-bottom: 8px;
+}
+
+.dynamic-row > * {
+    flex: 1;
+}
+
+.dynamic-row .btn-icon {
+    flex: 0 0 auto;
+    background: var(--md-error-container);
+    color: var(--md-on-error-container);
+    width: 36px;
+    height: 36px;
+    margin-bottom: 1px;
+}
+
+.dynamic-row .btn-icon:hover {
+    background: color-mix(in srgb, var(--md-error-container) 85%, var(--md-on-error-container) 15%);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+th,
+td {
+    text-align: left;
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--md-outline-variant);
+    vertical-align: middle;
+}
+
+th {
+    color: var(--md-on-surface-variant);
+    font-weight: 500;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+tbody tr {
+    transition: background-color 0.12s var(--motion-standard);
+}
+
+tbody tr:hover {
+    background-color: var(--md-surface-container-high);
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: var(--shape-full);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.pill-approved {
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+}
+
+.pill-pending {
+    background: var(--md-warning-container);
+    color: var(--md-on-warning-container);
+}
+
+.pill-rejected {
+    background: var(--md-error-container);
+    color: var(--md-on-error-container);
+}
+
+.row-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* ---------- Modal (Material 3 Dialog — signature extra-large corners) ---------- */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+    animation: overlay-in 0.15s var(--motion-standard);
+}
+
+@keyframes overlay-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal {
+    background: var(--md-surface-container-high);
+    border-radius: var(--shape-xl);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 28px;
+    box-shadow: var(--elevation-3);
+    animation: modal-in 0.2s var(--motion-standard);
+}
+
+@keyframes modal-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal h2 {
+    margin-top: 0;
+    font-size: 1.375rem;
+    font-weight: 500;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* ---------- Snackbar (M3 keeps this small-radius and dark, never a pill) ---------- */
+
+#toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--md-inverse-surface);
+    color: var(--md-inverse-on-surface);
+    padding: 12px 16px;
+    border-radius: var(--shape-xs);
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: var(--elevation-2);
+    max-width: 340px;
+    animation: toast-in 0.2s var(--motion-standard);
+}
+
+.toast .material-symbols-outlined {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.toast.success .material-symbols-outlined {
+    color: var(--md-inverse-primary);
+}
+
+.toast.error .material-symbols-outlined {
+    color: #ffb4ab;
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.log-box {
+    background: var(--md-surface-container-highest);
+    border-radius: var(--shape-sm);
+    padding: 12px;
+    font-family: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.78rem;
+    color: var(--md-on-surface);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.empty-hint {
+    color: var(--md-on-surface-variant);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 26px 20px;
+    line-height: 1.5;
+}
+
+/* ---------- Login page ---------- */
+
+.login-page {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--md-background);
+}
+
+.login-layout {
+    display: flex;
+    height: 100vh;
+}
+
+.login-hero {
+    flex: 1 1 45%;
+    background: radial-gradient(circle at 25% 20%, #17422a 0%, #081c10 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 40px;
+}
+
+.login-hero img {
+    width: min(360px, 80%);
+    border-radius: var(--shape-xl);
+    box-shadow: var(--elevation-3);
+}
+
+.login-hero-tagline {
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 1rem;
+    max-width: 340px;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.login-form-panel {
+    flex: 1 1 55%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--md-surface-container-high);
+    border-radius: var(--shape-xl);
+    padding: 32px;
+    margin-bottom: 0;
+    box-shadow: var(--elevation-2);
+    animation: modal-in 0.25s var(--motion-standard);
+}
+
+.login-title {
+    font-size: 1.6rem;
+    font-weight: 500;
+    margin: 0 0 6px;
+}
+
+.login-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--md-error-container);
+    color: var(--md-on-error-container);
+    padding: 10px 12px;
+    border-radius: var(--shape-sm);
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+}
+
+@media (max-width: 800px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        width: 240px;
+    }
+    .tab-panel {
+        padding: 18px 16px 60px;
+    }
+    .detail-header {
+        padding: 14px 16px;
+    }
+    .tabs {
+        padding: 0 16px 12px;
+    }
+}
+
+@media (max-width: 860px) {
+    .login-layout {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .login-hero {
+        flex: 0 0 auto;
+        padding: 28px 20px 20px;
+        gap: 12px;
+    }
+    .login-hero img {
+        width: 120px;
+    }
+    .login-hero-tagline {
+        display: none;
+    }
+    .login-form-panel {
+        flex: 0 0 auto;
+        padding: 24px 20px 40px;
+    }
+}

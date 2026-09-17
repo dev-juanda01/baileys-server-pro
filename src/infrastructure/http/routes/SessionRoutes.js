@@ -14,6 +14,21 @@ const router = Router();
 
 /**
  * @swagger
+ * /api/sessions:
+ *   get:
+ *     summary: Lista todas las sesiones persistidas con su estado en vivo
+ *     description: >
+ *       Combina los metadatos guardados en disco con el estado en memoria
+ *       (status, proveedor, si está corriendo). No incluye tokens.
+ *     tags: [Sessions]
+ *     responses:
+ *       '200':
+ *         description: Lista de sesiones obtenida exitosamente.
+ */
+router.get("/", SessionController.list);
+
+/**
+ * @swagger
  * /api/sessions/start:
  *   post:
  *     summary: Inicia una nueva sesión de WhatsApp

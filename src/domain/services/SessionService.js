@@ -188,6 +188,43 @@ class SessionService {
     }
 
     /**
+     * Lists every session persisted on disk, merged with its live in-memory
+     * state (status, provider, whether it's actually running). Powers the
+     * dashboard's instance list — never includes tokens, only whether a Meta
+     * config is present.
+     * @returns {Array<object>}
+     */
+    listSessions() {
+        const allSessionIds = SessionRepository.getAllSessions();
+
+        return allSessionIds.map((sessionId) => {
+            const meta = SessionRepository.getMetadata(sessionId) || {};
+            const activeSession = this.sessions.get(sessionId);
+            const isMetaSession =
+                activeSession?.constructor?.name === "MetaProvider";
+            const hasMetaConfig = Boolean(
+                meta.metaConfig?.phoneId && meta.metaConfig?.token
+            );
+
+            return {
+                sessionId,
+                webhookUrl: meta.webhookUrl || null,
+                hasMetaConfig,
+                provider: activeSession
+                    ? isMetaSession
+                        ? "META_CLOUD_API"
+                        : "WHATSAPP_WEB"
+                    : hasMetaConfig
+                    ? "META_CLOUD_API"
+                    : "WHATSAPP_WEB",
+                status: activeSession?.status || "stopped",
+                active: Boolean(activeSession),
+                updatedAt: meta.updatedAt || null,
+            };
+        });
+    }
+
+    /**
      * Migrates an already-authenticated session to a new sessionId, WITHOUT
      * invalidating the underlying WhatsApp Business App device pairing or the
      * Meta Cloud API credentials — renames the on-disk session folder and

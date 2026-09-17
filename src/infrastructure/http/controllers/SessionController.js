@@ -4,6 +4,23 @@ import logger from "../../../shared/logger.js";
 
 class SessionController {
     /**
+     * @summary Lists every persisted session with its live status.
+     * @description Powers the dashboard's instance list. Merges what's stored on
+     * disk with the in-memory provider state; never includes tokens.
+     * @param {object} req
+     * @param {object} res
+     */
+    async list(req, res) {
+        try {
+            const sessions = SessionService.listSessions();
+            res.status(200).json({ success: true, data: sessions });
+        } catch (error) {
+            logger.error({ error }, "Error listing sessions");
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+
+    /**
      * @summary Starts a new WhatsApp session.
      * @description Creates and starts a new session, either with Baileys or Meta Provider.
      * @param {object} req - El objeto de solicitud de Express.

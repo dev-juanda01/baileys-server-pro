@@ -1,4 +1,6 @@
-# Baileys Server Pro v2.0 🚀
+# Hermes Server v2.0 🚀
+
+> Anteriormente conocido como "Baileys Server Pro".
 
 Un servidor de WhatsApp robusto y escalable con Arquitectura Híbrida. Permite gestionar sesiones utilizando @whiskeysockets/baileys (conexión por QR) o la API Oficial de Meta (Cloud API) de forma transparente.
 
@@ -48,7 +50,7 @@ La forma más sencilla de levantar el servidor es usando `docker-compose`.
     version: "3.8"
     services:
         baileys-server:
-            image: tu-usuario/baileys-server-pro:latest
+            image: tu-usuario/hermes-server:latest
             container_name: baileys-pro
             restart: always
             ports:
@@ -73,6 +75,20 @@ La forma más sencilla de levantar el servidor es usando `docker-compose`.
     ```
 
 Tu servidor estará corriendo en `http://localhost:3000`.
+
+## 🔐 Dashboard Web
+
+El servidor sirve un panel en `http://localhost:3000` para crear, monitorear y operar sesiones (equivalente al manager de Evolution API). El acceso al panel requiere login; configura estas variables en tu `.env`:
+
+```
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=una-contraseña-fuerte
+SESSION_SECRET=una-cadena-aleatoria-larga  # ej: openssl rand -hex 32
+```
+
+Si estas variables no están definidas, el panel responde `503` en vez de quedar abierto sin protección.
+
+**Importante:** este login protege únicamente la interfaz web (`/`). Los endpoints bajo `/api/sessions` y `/api/meta` siguen siendo públicos, tal como antes, para no romper integraciones existentes (p. ej. olimpochat). El panel incluye además un botón "API Key" que genera/revoca una clave — hoy es solo la base para una futura autenticación server-to-server; todavía no se valida contra ningún endpoint.
 
 ## 📚 Documentación de la API
 
@@ -157,7 +173,7 @@ curl -X POST http://localhost:3000/api/sessions/{sessionId}/send-button-message 
 
 ## 🪝 Webhooks
 
-El servidor enviará un POST a tu URL configurada cada vez que reciba un mensaje. Si tu servidor falla, Baileys Server Pro reintentará el envío hasta 3 veces antes de descartarlo y enviarte una alerta por email.
+El servidor enviará un POST a tu URL configurada cada vez que reciba un mensaje. Si tu servidor falla, Hermes Server reintentará el envío hasta 3 veces antes de descartarlo y enviarte una alerta por email.
 
 ```json
 {
