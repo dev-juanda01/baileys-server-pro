@@ -5,6 +5,8 @@ const state = {
     activeTab: "overview",
     pollTimer: null,
     templatesCache: {},
+    logsEventSource: null,
+    logsPaused: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ document
 // ---------------------------------------------------------------------------
 
 function selectSession(sessionId) {
+    closeLogsStream();
     state.selectedId = sessionId;
     state.activeTab = "overview";
     document
@@ -308,6 +311,12 @@ function openMigrateModal() {
 
 document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+        // Leaving the logs tab closes its live connection — no reason to
+        // keep an SSE stream open in the background for a tab the user isn't
+        // even looking at.
+        if (state.activeTab === "logs" && btn.dataset.tab !== "logs") {
+            closeLogsStream();
+        }
         state.activeTab = btn.dataset.tab;
         document
             .querySelectorAll(".tab-btn")
@@ -334,6 +343,9 @@ function renderActiveTabFresh() {
             break;
         case "settings":
             renderSettingsTab();
+            break;
+        case "logs":
+            renderLogsTab();
             break;
     }
 }
@@ -1246,6 +1258,102 @@ function renderApiKeyModal(statusRes, revealedKey = null) {
             if (res.success) renderApiKeyModal({ success: true, exists: false });
         });
     }
+}
+
+// ---------------------------------------------------------------------------
+// Logs en vivo
+// ---------------------------------------------------------------------------
+
+const LOG_LEVEL_META = {
+    10: { label: "TRACE", cls: "log-trace" },
+    20: { label: "DEBUG", cls: "log-debug" },
+    30: { label: "INFO", cls: "log-info" },
+    40: { label: "WARN", cls: "log-warn" },
+    50: { label: "ERROR", cls: "log-error" },
+    60: { label: "FATAL", cls: "log-error" },
+};
+
+function closeLogsStream() {
+    if (state.logsEventSource) {
+        state.logsEventSource.close();
+        state.logsEventSource = null;
+    }
+}
+
+function renderLogsTab() {
+    closeLogsStream();
+    state.logsPaused = false;
+
+    const container = document.getElementById("tab-logs");
+    container.innerHTML = `
+        <div class="card logs-card">
+            <div class="logs-toolbar">
+                <h3>${icon("terminal")} Tráfico en vivo — ${escapeHtml(state.selectedId)}</h3>
+                <div class="logs-toolbar-actions">
+                    <span id="logs-conn-dot" class="status-dot connecting" title="Conectando..."></span>
+                    <button id="btn-logs-pause" class="btn btn-secondary btn-sm">${icon("pause")} Pausar</button>
+                    <button id="btn-logs-clear" class="btn btn-secondary btn-sm">${icon("delete_sweep")} Limpiar</button>
+                </div>
+            </div>
+            <p class="card-subtitle">Mismo log que ves en la terminal del servidor, filtrado a esta sesión.</p>
+            <pre id="logs-output" class="logs-output"></pre>
+        </div>`;
+
+    const output = document.getElementById("logs-output");
+    const dot = document.getElementById("logs-conn-dot");
+
+    const isNearBottom = () =>
+        output.scrollHeight - output.scrollTop - output.clientHeight < 60;
+
+    const appendEntry = (entry) => {
+        const meta = LOG_LEVEL_META[entry.level] || LOG_LEVEL_META[30];
+        const time = entry.time
+            ? new Date(entry.time).toLocaleTimeString("es-CO", { hour12: false })
+            : "";
+        const stickToBottom = isNearBottom();
+
+        const line = document.createElement("div");
+        line.className = `log-line ${meta.cls}`;
+        line.innerHTML = `<span class="log-time">${time}</span><span class="log-level">${meta.label}</span><span class="log-msg">${escapeHtml(entry.msg)}</span>`;
+        output.appendChild(line);
+
+        // Cap how many lines stay in the DOM — this is a live tail, not a
+        // full archive (the server already caps its own replay buffer).
+        while (output.childElementCount > 500) output.removeChild(output.firstChild);
+
+        if (stickToBottom) output.scrollTop = output.scrollHeight;
+    };
+
+    const es = new EventSource(
+        `/api/logs/stream?session=${encodeURIComponent(state.selectedId)}`
+    );
+    es.onopen = () => {
+        dot.className = "status-dot open";
+        dot.title = "Conectado";
+    };
+    es.onerror = () => {
+        dot.className = "status-dot closed";
+        dot.title = "Desconectado — reintentando...";
+    };
+    es.onmessage = (event) => {
+        if (state.logsPaused) return;
+        try {
+            appendEntry(JSON.parse(event.data));
+        } catch {
+            // ignore malformed SSE payloads
+        }
+    };
+    state.logsEventSource = es;
+
+    document.getElementById("btn-logs-pause").addEventListener("click", (e) => {
+        state.logsPaused = !state.logsPaused;
+        e.currentTarget.innerHTML = state.logsPaused
+            ? `${icon("play_arrow")} Reanudar`
+            : `${icon("pause")} Pausar`;
+    });
+    document.getElementById("btn-logs-clear").addEventListener("click", () => {
+        output.innerHTML = "";
+    });
 }
 
 // ---------------------------------------------------------------------------

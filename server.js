@@ -11,6 +11,7 @@ import sessionRoutes from "./src/infrastructure/http/routes/SessionRoutes.js";
 import metaRoutes from "./src/infrastructure/http/routes/MetaRoutes.js";
 import authRoutes from "./src/infrastructure/http/routes/AuthRoutes.js";
 import settingsRoutes from "./src/infrastructure/http/routes/SettingsRoutes.js";
+import logsRoutes from "./src/infrastructure/http/routes/LogsRoutes.js";
 import { requireDashboardSession } from "./src/infrastructure/http/middlewares/dashboardAuth.js";
 import SessionService from "./src/domain/services/SessionService.js";
 import logger from "./src/shared/logger.js";
@@ -41,10 +42,11 @@ app.use("/api/sessions", sessionRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/logs", logsRoutes);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.listen(PORT, () => {
-    logger.info(`🚀 Baileys Server Pro v2.0 corriendo en puerto ${PORT}`);
+    logger.info(`🚀 Hermes Server v2.0 corriendo en puerto ${PORT}`);
     logger.info(
         `📚 Documentación disponible en http://localhost:${PORT}/api-docs`
     );

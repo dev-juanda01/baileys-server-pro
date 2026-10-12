@@ -1056,3 +1056,83 @@ tbody tr:hover {
         padding: 24px 20px 40px;
     }
 }
+
+/* =========================================================================
+   Logs en vivo — mismo tráfico que la terminal, por sesión, vía SSE.
+   ========================================================================= */
+.logs-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.logs-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.logs-toolbar h3 {
+    margin: 0;
+}
+
+.logs-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logs-output {
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: var(--shape-md);
+    background: #1a1c18;
+    color: #e3e6dd;
+    font-family: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    height: 440px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.log-line {
+    display: flex;
+    gap: 8px;
+}
+
+.log-time {
+    flex-shrink: 0;
+    opacity: 0.55;
+}
+
+.log-level {
+    flex-shrink: 0;
+    font-weight: 700;
+    width: 46px;
+}
+
+.log-msg {
+    flex: 1;
+    min-width: 0;
+}
+
+.log-info .log-level {
+    color: #8bd894;
+}
+
+.log-debug .log-level,
+.log-trace .log-level {
+    color: #9fb0ff;
+}
+
+.log-warn .log-level,
+.log-warn .log-msg {
+    color: #ffd27a;
+}
+
+.log-error .log-level,
+.log-error .log-msg {
+    color: #ff8f80;
+}
