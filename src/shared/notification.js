@@ -31,11 +31,11 @@ export const sendEmailAlert = async (subject, body) => {
 
     try {
         await transporter.sendMail({
-            from: `"Baileys Server Pro" <${process.env.SMTP_USER}>`,
+            from: `"Hermes Server" <${process.env.SMTP_USER}>`,
             to: process.env.EMAIL_NOTIFY_TO,
-            subject: `[ALERTA] Baileys Server: ${subject}`,
+            subject: `[ALERTA] Hermes Server: ${subject}`,
             html: `<div style="font-family: Arial, sans-serif; font-size: 14px;">
-                     <h2>Alerta Crítica del Servidor Baileys</h2>
+                     <h2>Alerta Crítica de Hermes Server</h2>
                      ${body}
                    </div>`,
         });

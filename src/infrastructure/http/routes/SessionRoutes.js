@@ -632,7 +632,7 @@ router.get("/:sessionId/templates", SessionController.getTemplates);
  *         required: true
  *         schema:
  *           type: string
- *         description: UUID del negocio (sessionId en baileys-server-pro).
+ *         description: UUID del negocio (sessionId en hermes-server).
  *     requestBody:
  *       required: true
  *       content:

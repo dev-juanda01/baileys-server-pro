@@ -49,9 +49,9 @@ La forma más sencilla de levantar el servidor es usando `docker-compose`.
     ```yml
     version: "3.8"
     services:
-        baileys-server:
+        hermes-server:
             image: tu-usuario/hermes-server:latest
-            container_name: baileys-pro
+            container_name: hermes-server
             restart: always
             ports:
                 - "3000:3000"

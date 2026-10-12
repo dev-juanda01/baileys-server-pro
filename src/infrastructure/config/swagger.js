@@ -3,7 +3,7 @@ import swaggerJSDoc from "swagger-jsdoc";
 const swaggerDefinition = {
     openapi: "3.0.0",
     info: {
-        title: "Baileys Server Pro API v2",
+        title: "Hermes Server API v2",
         version: "2.0.0",
         description: "API Híbrida para WhatsApp (Baileys + Meta Cloud API)",
     },
